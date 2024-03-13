@@ -38,7 +38,10 @@ from qgis.core import (
     QgsMapLayerProxyModel,
     QgsTask,
     QgsMessageLog,
-    QgsCoordinateTransform
+    QgsCoordinateTransform,
+    QgsReferencedGeometryBase,
+    QgsCoordinateReferenceSystem,
+    QgsTaskManager
 )
 
 from sys import version_info
@@ -52,6 +55,98 @@ import os.path
 
 
 VERSION = Qgis.QGIS_VERSION.split('.')[0:2]
+MESSAGE_CATEGORY = "RoadTask"
+TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
+
+
+class ReferencedShaft(QgsReferencedGeometryBase): # луч в заданной СК -- сомнительное решение??
+    def __init__(self, point, direction, crs=QgsCoordinateReferenceSystem(3857, QgsCoordinateReferenceSystem.EpsgCrsId)):
+        super().__init__(crs)
+        self.startPoint = point     # x0 y0 - начальные координаты
+        self.direction  = direction # dx dy - направление луча, нормализованный вектор
+        self.pointNum   = -1         # n - очередная точка на луче
+        self.step       = 1         # шаг в заданной СК и ее ед.измерения, с которым определяется точка
+        # Точка на луче
+        # xn = x0 + n*step*dx
+        # yn = y0 + n*step*dy
+    
+    def __str__(self):
+        return f'Shaft of:\nPoint:{self.startPoint}\nDirection{self.direction}\nAt crs of:{self.crs()}'
+    
+    def at(self): # текущий указатель луча
+        return self.pointNum
+    
+    def start(self): # указатель луча в начало
+        self.pointNum = -1
+    
+    def setStep(self, nstep): # изменить шаг определения точки на луче (перезагружает луч)
+        self.start()
+        self.step = nstep
+    
+    def PointAt(self, num): # определение точки на луче с указанием номера
+        return self.startPoint + self.direction*num*self.step
+    
+    def nextPoint(self): # след.точка
+        self.pointNum+=1
+        return self.PointAt(self.at())
+    
+    def pointOnShaft(self, point) -> bool: # принадлежит ли точка лучу
+        norm = (point - self.startPoint).normalized()
+        if (norm == self.direction):
+            return True
+        else:
+            return False   
+    
+    def pointsOnShaftTo(self,point,step=1): # список из точек, расположенных на луче до указанной с выбранным шагом в СК
+        if (self.pointOnShaft(point)):
+            self.setStep(step)
+            pointList = []
+            
+            Npoint = self.nextPoint()
+            while abs(Npoint.x()) < abs(point.x()):
+                pointList.append(Npoint)
+                Npoint = self.nextPoint()
+            
+            return pointList
+        else:
+            return None
+
+class CalculateTaskOptions(): # для передачи данных о свойствах задачи
+    def __init__(self, dem_layer, lines, step, band):
+        self.DemLayer = dem_layer   # QgsRasterLayer
+        self.roadLines = lines      # QgsVectorLayer
+        self.SampleStep = step      # numerical step of sampling raster
+        self.BandNo = band          # integer, number of band
+
+    def __str__(self):
+        str_r = "Calculation Parameters\n"
+        str_r += "Lines Layer: " + self.roadLines.name() + "\n"
+        str_r += "DEM Layer: " + self.DemLayer.name() + " Band:" + str(self.BandNo) + "\n"
+        str_r += "Sample Step: " + str(self.SampleStep) + " in " + str(self.DemLayer.crs().mapUnits())  + "\n"
+        return str_r
+
+class CalculateTask(QgsTask): # тестовая версия задачи
+    def __init__(self, description, task_options):
+        super().__init__(description, QgsTask.CanCancel)
+        self.options = task_options
+        self.result = None
+
+    def run(self): # основная функция задачи     
+        print('** Task run')
+        current_progress = 0.0
+        while (current_progress < 100):
+            self.setProgress(current_progress)
+            current_progress+=10
+
+        return True
+    
+    def finished(self, result): # завершение задачи
+        print('Task Ended with ' + str(result))
+        self.result = 100
+       
+    def cancel(self): # отмена задачи
+        super().cancel()
+
 
 class TestPlugin:
     """QGIS Plugin Implementation."""
@@ -93,6 +188,11 @@ class TestPlugin:
 
         self.pluginIsActive = False
         self.dockwidget = None
+
+
+        self.task_manager = QgsTaskManager()
+        self.task_manager.allTasksFinished.connect(self.allTasksFinished)
+        self.task_manager.progressChanged.connect(self.taskProgresChanged)
 
 
     # noinspection PyMethodMayBeStatic
@@ -268,7 +368,9 @@ class TestPlugin:
             for i in range(l.bandCount()):
                 self.dockwidget.comboBox_band.addItem(str(i+1))
 
-    def runTask(self): # тестирование запуска
+    def runTask(self): # тестирование запуск
+        self.dockwidget.textEdit_log.clear()
+
         lineVector = self.dockwidget.mMapLayerComboBox.currentLayer()
         DemRaster = self.dockwidget.mMapLayerComboBox_raster.currentLayer()
         BandNo = self.dockwidget.comboBox_band.currentIndex()
@@ -276,39 +378,29 @@ class TestPlugin:
         CoordVectoDemTransfer = QgsCoordinateTransform(lineVector.crs(), DemRaster.crs(), QgsProject.instance())
         # класс для трансформирования QgsReferencedGeometryBase в из одной СК в другую
 
-        if (type(lineVector) is QgsVectorLayer):
-            print("** Line Layer")
-            print("Coordinate System: " , lineVector.crs() , " UNITS: " , lineVector.crs().mapUnits())
-            print("Extent" , lineVector.extent())
-            
-            if (lineVector.geometryType() == Qgis.GeometryType.Line):
-                features = lineVector.getFeatures()
-                # получает QgsFeatureIterator - список из QgsFeature (класс для описания 1 объекта в слое)
-
-                if not features.isValid(): # проверка на ошибки в получении объектов
-                    print("** Not Valid iterator")
-                    return
-
-                for feature in features: # проход по всем объектам слоя
-                    geomLine = feature.geometry().asPolyline() # список из составляющих геометрии объекта,
-                    # представленных, как Линия
-                    # geometry() - возвращает класс QgsGeometry (пространственное представление объекта)
-                    # asPolyline() - представление объекта как линии из списка точек
-                    length = len(geomLine)
-
-                    for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
-                        print("LINE NO " + str(i))
-                        print(geomLine[i], end="")
-                        print(geomLine[i+1], end="\n")
-            
-            print("- - - - - - - - - - - - - - -")
-        
-        if (type(DemRaster) is QgsRasterLayer):
-            print("** Dem Layer")
-            print("Coordinate System: " , DemRaster.crs() , " UNITS: " , DemRaster.crs().mapUnits())
-            print("Extent" , DemRaster.extent())
-            print("band No:" , BandNo)
-
         print("Vector layer in Dem crs extent:" , CoordVectoDemTransfer.transform(lineVector.extent()))
         print("Vector and Raster layer have interception? = ", DemRaster.extent().contains(CoordVectoDemTransfer.transform(lineVector.extent()))) 
-        # проверк№а пересечения экстентов слоев
+
+        cto = CalculateTaskOptions(DemRaster, lineVector, self.dockwidget.doubleSpinBox_stepSize.value(), BandNo)
+        self.dockwidget.textEdit_log.append(str(cto))
+        newTask = CalculateTask(TASK_DESCRIPTION, cto)
+        self.task_manager.addTask(newTask)
+
+        newTask.taskCompleted.connect(self.CalcTaskComplete)
+
+        
+    
+    def CalcTaskComplete(self): # коннект с классом задачи на ее завершение
+        self.iface.messageBar().pushMessage("Finished calculating", level=Qgis.Success)
+
+    def allTasksFinished(self): # все активные задачи завершены
+        print("--------ALL-TASKS-FINISED-----------")
+        for i, task in enumerate(self.task_manager.tasks()):
+            self.dockwidget.textEdit_log.append("Task No " + str(i) + " Finished with " + str(task.result))
+            del task
+        
+        # print(len(self.task_manager.tasks()))
+        # print(self.task_manager.count())
+    
+    def taskProgresChanged(self, task_id, progress): # прогресс в задаче обновлен
+        print(task_id, progress)
