@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/test_plugin" >
+    <qresource prefix="/plugins/dem_road_analysis" >
         <file>icon.png</file>
     </qresource>
 </RCC>

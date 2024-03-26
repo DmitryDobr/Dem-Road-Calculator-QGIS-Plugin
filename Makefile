@@ -1,12 +1,12 @@
 #/***************************************************************************
-# TestPlugin
+# RoadAnalysis
 #
-# test 01
+# Plugin for road analysis with DEM info
 #							 -------------------
-#		begin				: 2024-03-05
+#		begin				: 2024-03-26
 #		git sha				: $Format:%H$
-#		copyright			: (C) 2024 by test01
-#		email				: test@test
+#		copyright			: (C) 2024 by Dmitry D.
+#		email				: dmitrdobr@mail.ru
 # ***************************************************************************/
 #
 #/***************************************************************************
@@ -38,15 +38,15 @@ LOCALES =
 # translation
 SOURCES = \
 	__init__.py \
-	test_plugin.py test_plugin_dockwidget.py
+	dem_road_analysis.py dem_road_analysis_dialog.py
 
-PLUGINNAME = test_plugin
+PLUGINNAME = dem_road_analysis
 
 PY_FILES = \
 	__init__.py \
-	test_plugin.py test_plugin_dockwidget.py
+	dem_road_analysis.py dem_road_analysis_dialog.py
 
-UI_FILES = test_plugin_dockwidget_base.ui
+UI_FILES = dem_road_analysis_dialog_base.ui
 
 EXTRAS = metadata.txt icon.png
 
