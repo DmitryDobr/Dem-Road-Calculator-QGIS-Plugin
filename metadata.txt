@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Test Plugin
+name=Dem Road Analysis
 qgisMinimumVersion=3.0
-description=test 01
+description=Plugin for road analysis with DEM info
 version=0.1
-author=test01
-email=test@test
+author=Dmitry D.
+email=dmitrdobr@mail.ru
 
-about=Test 01
+about=Plugin for road analysis with DEM info
 
 tracker=http://bugs
-repository=http://repo
+repository=https://github.com/DmitryDobr/testPluginQGIS
 # End of mandatory metadata
 
 # Recommended items:
@@ -23,7 +23,7 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=python
+tags=analysis, dem
 
 homepage=http://homepage
 category=Plugins
