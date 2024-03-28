@@ -74,13 +74,16 @@ class CalculateTask(QgsTask): # тестовая версия задачи
         super().__init__(description, QgsTask.CanCancel)
         self.options = task_options
         self.result = None
+        self.iter = 100
     
     def run(self): # основная функция задачи     
         print('** Task run')
         current_progress = 0.0
-        while (current_progress < 100):
-            self.setProgress(current_progress)
-            current_progress+=10
+        step = 100 / self.iter
+        for i in range(0, self.iter):
+            current_progress+=step
+            self.setProgress(round(current_progress))
+            pass
 
         return True
     
@@ -266,6 +269,18 @@ class RoadAnalysis:
     def runTask(self):
         self.dlg.textEdit_log.append("Запуск алгоритма " + TASK_DESCRIPTION )
         self.dlg.tabWidget.setCurrentIndex(1)
+
+        cur_opt = DemRoadCalculationOptions(self.dlg.mMapLayerComboBox_DEM.currentLayer(), 
+                                            self.dlg.mMapLayerComboBox_lines.currentLayer(),
+                                            self.dlg.doubleSpinBox_sample.value(),
+                                            self.dlg.comboBox_band.currentIndex() - 1)
+        
+        self.dlg.textEdit_log.append(str(cur_opt))
+
+        active_task = CalculateTask(TASK_DESCRIPTION, cur_opt)
+        self.task_manager.addTask(active_task)
+        self.dlg.progressBar.setValue(0)
+
     
     def allTasksFinished(self): # все активные задачи завершены
         print("--------ALL-TASKS-FINISED-----------")
@@ -278,3 +293,5 @@ class RoadAnalysis:
     
     def taskProgresChanged(self, task_id, progress): # прогресс в задаче обновлен
         print(task_id, progress)
+        self.dlg.progressBar.setValue(int(progress))
+
