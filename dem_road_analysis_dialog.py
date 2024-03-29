@@ -65,5 +65,10 @@ class RoadAnalysisDialog(QtWidgets.QDialog, FORM_CLASS):
         if (type(l) is QgsRasterLayer):
             for i in range(l.bandCount()):
                 self.comboBox_band.addItem(str(i+1))
+    
+    def setLockGUI(self, flag = False):
+        self.tabWidget.widget(0).setEnabled(flag)
+        self.pushButton_start.setEnabled(flag)
+        pass
 
 
