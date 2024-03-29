@@ -79,11 +79,56 @@ class CalculateTask(QgsTask): # тестовая версия задачи
     def run(self): # основная функция задачи     
         print('** Task run')
         current_progress = 0.0
-        step = 100 / self.iter
-        for i in range(0, self.iter):
-            current_progress+=step
+
+        LineFeatures = self.options.roadLines.getFeatures() # QgsFeatureIterator
+
+        if not LineFeatures.isValid(): # проверка на ошибки в получении объектов
+            print("** Not Valid iterator")
+            return False
+        
+        step = 100 / self.options.roadLines.featureCount()
+        
+        iterator = 0
+
+        for LineFeature in LineFeatures: # проход по всем объектам слоя
+            LineGeometry = None
+            try:
+                LineGeometry = LineFeature.geometry().asMultiPolyline()
+            except TypeError:
+                try:
+                    LineGeometry = LineFeature.geometry().asPolyline()
+                except TypeError:
+                    print("** No Valid Geometry")
+                    return False
+                else:
+                    # полилиния = список точек => [i] => точка
+                    length = len(LineGeometry)
+                    print("len points of PolyLine No", iterator , length)
+
+                    for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
+                        print("LINE NO " + str(i))
+                        print(LineGeometry[i], end="")
+                        print(LineGeometry[i+1], end="\n")
+                    print("- - - - - - - - - - - - - - -")
+            else:
+                # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
+
+                length = len(LineGeometry) # количество полилиний
+
+                print("Count of Polylines in MultiPolyLine No" , iterator, ' = ' , length)
+
+                PolyLineIterator = 0
+
+                for PolyLine in LineGeometry:
+                    length = len(PolyLine)
+                    print("Count of Points in PolyLine No " , PolyLineIterator , length)
+                    print("First point is " , PolyLine[0])
+                    PolyLineIterator += 1
+                
+            iterator += 1
+
+            current_progress += step
             self.setProgress(round(current_progress))
-            pass
 
         return True
     
