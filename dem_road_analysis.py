@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
@@ -34,7 +34,6 @@ from qgis.core import (
     QgsFeature, 
     QgsFeatureIterator, 
     QgsPointXY, 
-    QgsMapLayerProxyModel,
     QgsTask,
     QgsMessageLog,
     QgsCoordinateTransform,
@@ -65,11 +64,13 @@ class DemRoadCalculationOptions():
     def __str__(self):
         str_r = "Calculation Parameters\n"
         str_r += "Lines Layer: " + self.roadLines.name() + "\n"
-        str_r += "DEM Layer: " + self.DemLayer.name() + " Band:" + str(self.BandNo) + "\n"
+        str_r += "DEM Layer: " + self.DemLayer.name() + " Band:" + str(self.BandNo + 1) + "\n"
         str_r += "Sample Step: " + str(self.SampleStep) + " in " + str(self.DemLayer.crs().mapUnits())  + "\n"
         return str_r
       
 class CalculateTask(QgsTask): # тестовая версия задачи
+    bufResult = pyqtSignal(str)
+
     def __init__(self, description, task_options):
         super().__init__(description, QgsTask.CanCancel)
         self.options = task_options
@@ -78,17 +79,68 @@ class CalculateTask(QgsTask): # тестовая версия задачи
     def run(self): # основная функция задачи     
         print('** Task run')
         current_progress = 0.0
-        while (current_progress < 100):
-            self.setProgress(current_progress)
-            current_progress+=10
+
+        LineFeatures = self.options.roadLines.getFeatures() # QgsFeatureIterator
+
+        if not LineFeatures.isValid(): # проверка на ошибки в получении объектов
+            print("** Not Valid iterator")
+            return False
+        
+        step = 100 / self.options.roadLines.featureCount()
+        
+        iterator = 0
+
+        for LineFeature in LineFeatures: # проход по всем объектам слоя
+            
+            if self.isCanceled():
+                return False
+
+            LineGeometry = None
+            try:
+                LineGeometry = LineFeature.geometry().asMultiPolyline()
+            except TypeError:
+                try:
+                    LineGeometry = LineFeature.geometry().asPolyline()
+                except TypeError:
+                    print("** No Valid Geometry")
+                    return False
+                else:
+                    # полилиния = список точек => [i] => точка
+                    length = len(LineGeometry)
+                    self.bufResult.emit("len points of PolyLine No" + str(iterator) + " : " + str(length))
+
+                    # for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
+                    #     print("LINE NO " + str(i))
+                    #     print(LineGeometry[i], end="")
+                    #     print(LineGeometry[i+1], end="\n")
+                        
+                    # print("- - - - - - - - - - - - - - -")
+            else:
+                # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
+                length = len(LineGeometry) # количество полилиний
+                self.bufResult.emit("Count of Polylines in MultiPolyLine No" + str(iterator) + ' = ' + str(length))
+
+                # PolyLineIterator = 0
+
+                # for PolyLine in LineGeometry:
+                #     length = len(PolyLine)
+                #     print("Count of Points in PolyLine No " , PolyLineIterator , length)
+                #     print("First point is " , PolyLine[0])
+                #     PolyLineIterator += 1
+                
+            iterator += 1
+
+            current_progress += step
+            self.setProgress(round(current_progress))
 
         return True
     
     def finished(self, result): # завершение задачи
-        print('Task Ended with ' + str(result))
+        print('*** Task Ended with ' + str(result))
         self.result = result
        
     def cancel(self): # отмена задачи
+        print('** Task cancel')
         super().cancel()
 
 
@@ -252,6 +304,7 @@ class RoadAnalysis:
             self.dlg = RoadAnalysisDialog()
 
             self.dlg.pushButton_start.clicked.connect(self.runTask)
+            self.dlg.pushButton_stop.clicked.connect(self.stopTask)
 
         # show the dialog
         self.dlg.show()
@@ -264,17 +317,45 @@ class RoadAnalysis:
             pass
     
     def runTask(self):
+
+        self.dlg.setLockGUI(True)
+
         self.dlg.textEdit_log.append("Запуск алгоритма " + TASK_DESCRIPTION )
         self.dlg.tabWidget.setCurrentIndex(1)
-    
+
+        cur_opt = DemRoadCalculationOptions(self.dlg.mMapLayerComboBox_DEM.currentLayer(), 
+                                            self.dlg.mMapLayerComboBox_lines.currentLayer(),
+                                            self.dlg.doubleSpinBox_sample.value(),
+                                            self.dlg.comboBox_band.currentIndex())
+        
+        self.dlg.textEdit_log.append(str(cur_opt))
+
+        active_task = CalculateTask(TASK_DESCRIPTION, cur_opt)
+
+
+        active_task.bufResult.connect(self.info)
+
+        self.task_manager.addTask(active_task)
+        self.dlg.progressBar.setValue(0)
+
+    def stopTask(self):
+        self.task_manager.cancelAll()
+
+    def info(self, arg1):
+        self.dlg.textEdit_log.append(arg1)
+
     def allTasksFinished(self): # все активные задачи завершены
-        print("--------ALL-TASKS-FINISED-----------")
+        print("[Task Manager]: ALL TASKS FINISED")
         for i, task in enumerate(self.task_manager.tasks()):
             self.dlg.textEdit_log.append("Task No " + str(i) + " Finished with " + str(task.result))
             del task
+        
+        self.dlg.setLockGUI(False)
         
         # print(len(self.task_manager.tasks()))
         # print(self.task_manager.count())
     
     def taskProgresChanged(self, task_id, progress): # прогресс в задаче обновлен
-        print(task_id, progress)
+        # print(task_id, progress)
+        self.dlg.progressBar.setValue(int(progress))
+
