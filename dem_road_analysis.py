@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, pyqtSignal, pyqtSlot, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
@@ -35,12 +35,15 @@ from qgis.core import (
     QgsFeatureIterator, 
     QgsPointXY, 
     QgsTask,
-    QgsMessageLog,
+    QgsField,
     QgsCoordinateTransform,
     QgsReferencedGeometryBase,
     QgsCoordinateReferenceSystem,
-    QgsTaskManager
+    QgsTaskManager,
+    edit
 )
+
+import math
 
 
 # Initialize Qt resources from file resources.py
@@ -61,6 +64,12 @@ class DemRoadCalculationOptions():
         self.SampleStep = step      # numerical step of sampling raster
         self.BandNo = band          # integer, number of band
 
+        self.index = self.roadLines.fields().lookupField("value_")
+        if (self.index == -1):
+            self.roadLines.dataProvider().addAttributes([QgsField("value_", QVariant.Double)])
+            self.roadLines.updateFields()
+            self.index = self.options.roadLines.fields().lookupField("value_")
+
     def __str__(self):
         str_r = "Calculation Parameters\n"
         str_r += "Lines Layer: " + self.roadLines.name() + "\n"
@@ -75,26 +84,50 @@ class CalculateTask(QgsTask): # тестовая версия задачи
         super().__init__(description, QgsTask.CanCancel)
         self.options = task_options
         self.result = None
+
+
+    def P2P_Calculation(self, p1, p2):
+        vector = p2-p1
+
+        count_points = 0
+        meanHeight = 0
+
+        if (vector.length() > self.options.SampleStep):
+            count_points = math.floor(vector.length() / self.options.SampleStep)
+            vector = vector.normalized()
+
+            p = p1
+            for i in range(1,count_points):
+                p = p + vector*self.options.SampleStep
+
+                val, res = self.options.DemLayer.dataProvider().sample(p , self.options.BandNo + 1)
+                if (res):
+                    meanHeight += val
+
+        return (meanHeight , count_points)
     
-    def run(self): # основная функция задачи     
+    def run(self): # основная функция задачи  
+
+        # if (self.options.DemLayer.crs()
+
         print('** Task run')
         current_progress = 0.0
 
         LineFeatures = self.options.roadLines.getFeatures() # QgsFeatureIterator
-
         if not LineFeatures.isValid(): # проверка на ошибки в получении объектов
+            self.bufResult.emit("[" + self.description + "]: (ERROR) Not Valid iterator in vector layer")
             print("** Not Valid iterator")
             return False
         
-        step = 100 / self.options.roadLines.featureCount()
         
+
+        step = 100 / self.options.roadLines.featureCount()        
         iterator = 0
 
         for LineFeature in LineFeatures: # проход по всем объектам слоя
-            
             if self.isCanceled():
                 return False
-
+     
             LineGeometry = None
             try:
                 LineGeometry = LineFeature.geometry().asMultiPolyline()
@@ -107,26 +140,39 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 else:
                     # полилиния = список точек => [i] => точка
                     length = len(LineGeometry)
-                    self.bufResult.emit("len points of PolyLine No" + str(iterator) + " : " + str(length))
-
-                    # for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
-                    #     print("LINE NO " + str(i))
-                    #     print(LineGeometry[i], end="")
-                    #     print(LineGeometry[i+1], end="\n")
+                    
+                    MeanHeight = 0
+                    PointsCount = 0
+                    for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
+                        res = self.P2P_Calculation(LineGeometry[i], LineGeometry[i+1])
+                        MeanHeight += res[0]
+                        PointsCount += res[1]
                         
-                    # print("- - - - - - - - - - - - - - -")
+                    with edit(self.options.roadLines):
+                        LineFeature.setAttribute(self.options.index , MeanHeight / PointsCount)
+                        self.options.roadLines.updateFeature(LineFeature)
+                    
             else:
                 # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
-                length = len(LineGeometry) # количество полилиний
-                self.bufResult.emit("Count of Polylines in MultiPolyLine No" + str(iterator) + ' = ' + str(length))
+                # нужна будет опция о разбиении мультиполилиний на множество полилиний в новом временном слое??
+                PolyLineIterator = 0
 
-                # PolyLineIterator = 0
+                MeanHeight = 0
+                PointsCount = 0
+                for PolyLine in LineGeometry:
+                    length = len(PolyLine)
 
-                # for PolyLine in LineGeometry:
-                #     length = len(PolyLine)
-                #     print("Count of Points in PolyLine No " , PolyLineIterator , length)
-                #     print("First point is " , PolyLine[0])
-                #     PolyLineIterator += 1
+                    for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
+                        res = self.P2P_Calculation(PolyLine[i], PolyLine[i+1])
+                        MeanHeight += res[0]
+                        PointsCount += res[1]
+                        print(MeanHeight)
+
+                    PolyLineIterator += 1
+                
+                with edit(self.options.roadLines):
+                    LineFeature.setAttribute(self.options.index , MeanHeight / PointsCount)
+                    self.options.roadLines.updateFeature(LineFeature)
                 
             iterator += 1
 
@@ -318,7 +364,7 @@ class RoadAnalysis:
     
     def runTask(self):
 
-        self.dlg.setLockGUI(True)
+        self.dlg.setGUILocked(False)
 
         self.dlg.textEdit_log.append("Запуск алгоритма " + TASK_DESCRIPTION )
         self.dlg.tabWidget.setCurrentIndex(1)
@@ -350,7 +396,7 @@ class RoadAnalysis:
             self.dlg.textEdit_log.append("Task No " + str(i) + " Finished with " + str(task.result))
             del task
         
-        self.dlg.setLockGUI(False)
+        self.dlg.setGUILocked(True)
         
         # print(len(self.task_manager.tasks()))
         # print(self.task_manager.count())
