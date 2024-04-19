@@ -27,6 +27,7 @@ from qgis.PyQt.QtWidgets import QAction
 
 from qgis.core import (
     Qgis,
+    QgsVector,
     QgsProject, 
     QgsVectorLayer, 
     QgsRasterLayer,
@@ -70,15 +71,26 @@ class DemRoadCalculationOptions():
             self.roadLines.updateFields()
             self.index = self.options.roadLines.fields().lookupField("value_")
 
+        
+        print(self.roadLines.crs().axisOrdering())
+
     def __str__(self):
         str_r = "Calculation Parameters\n"
         str_r += "Lines Layer: " + self.roadLines.name() + "\n"
         str_r += "DEM Layer: " + self.DemLayer.name() + " Band:" + str(self.BandNo + 1) + "\n"
         str_r += "Sample Step: " + str(self.SampleStep) + " in " + str(self.DemLayer.crs().mapUnits())  + "\n"
         return str_r
+
+    def renderRasterValue(self, point):
+        val, res = self.DemLayer.dataProvider().sample(point , self.BandNo + 1)
+        if (res):
+            return val
+        else:
+            # print(point)
+            return None
       
 class CalculateTask(QgsTask): # тестовая версия задачи
-    bufResult = pyqtSignal(str)
+    printResult = pyqtSignal(str)
 
     def __init__(self, description, task_options):
         super().__init__(description, QgsTask.CanCancel)
@@ -96,31 +108,48 @@ class CalculateTask(QgsTask): # тестовая версия задачи
             count_points = math.floor(vector.length() / self.options.SampleStep)
             vector = vector.normalized()
 
-            p = p1
-            for i in range(1,count_points):
-                p = p + vector*self.options.SampleStep
+            current_point = p1
+            SlWindowMatrix = [[0] * 3 for _ in range(3)]
+            rasterX = self.options.DemLayer.rasterUnitsPerPixelX()
+            rasterY = self.options.DemLayer.rasterUnitsPerPixelY()
 
-                val, res = self.options.DemLayer.dataProvider().sample(p , self.options.BandNo + 1)
-                if (res):
+            for _ in range(1,count_points):
+                current_point = current_point + vector*self.options.SampleStep
+
+                val = self.options.renderRasterValue(current_point)
+                if (val):
                     meanHeight += val
+
+                print('----------------------------------')
+                # print(current_point)
+                for y in range(-1,2):
+                    for x in range(-1,2):
+                        buf_point = QgsPointXY(current_point)
+                        buf_point += QgsVector(rasterY*y, rasterX*x)
+                        val = self.options.renderRasterValue(buf_point)
+                        # print(val)
+                        SlWindowMatrix[y+1][x+1] = val
+                        # print(y,x)
+                        # print(buf_point)
+
+
+            # print(p.x())
+            # print(p.y())
+            for i in range(0,3):
+                print(SlWindowMatrix[i])
 
         return (meanHeight , count_points)
     
     def run(self): # основная функция задачи  
-
-        # if (self.options.DemLayer.crs()
-
         print('** Task run')
         current_progress = 0.0
 
         LineFeatures = self.options.roadLines.getFeatures() # QgsFeatureIterator
         if not LineFeatures.isValid(): # проверка на ошибки в получении объектов
-            self.bufResult.emit("[" + self.description + "]: (ERROR) Not Valid iterator in vector layer")
+            self.printResult.emit("[" + self.description + "]: (ERROR) Not Valid iterator in vector layer")
             print("** Not Valid iterator")
             return False
         
-        
-
         step = 100 / self.options.roadLines.featureCount()        
         iterator = 0
 
@@ -379,7 +408,7 @@ class RoadAnalysis:
         active_task = CalculateTask(TASK_DESCRIPTION, cur_opt)
 
 
-        active_task.bufResult.connect(self.info)
+        active_task.printResult.connect(self.info)
 
         self.task_manager.addTask(active_task)
         self.dlg.progressBar.setValue(0)
