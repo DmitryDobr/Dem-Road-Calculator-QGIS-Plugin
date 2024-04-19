@@ -21,12 +21,13 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, pyqtSignal, pyqtSlot, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from qgis.core import (
     Qgis,
+    QgsVector,
     QgsProject, 
     QgsVectorLayer, 
     QgsRasterLayer,
@@ -35,12 +36,15 @@ from qgis.core import (
     QgsFeatureIterator, 
     QgsPointXY, 
     QgsTask,
-    QgsMessageLog,
+    QgsField,
     QgsCoordinateTransform,
     QgsReferencedGeometryBase,
     QgsCoordinateReferenceSystem,
-    QgsTaskManager
+    QgsTaskManager,
+    edit
 )
+
+import math
 
 
 # Initialize Qt resources from file resources.py
@@ -61,40 +65,98 @@ class DemRoadCalculationOptions():
         self.SampleStep = step      # numerical step of sampling raster
         self.BandNo = band          # integer, number of band
 
+        self.index = self.roadLines.fields().lookupField("value_")
+        if (self.index == -1):
+            self.roadLines.dataProvider().addAttributes([QgsField("value_", QVariant.Double)])
+            self.roadLines.updateFields()
+            self.index = self.options.roadLines.fields().lookupField("value_")
+
+        
+        print(self.roadLines.crs().axisOrdering())
+
     def __str__(self):
         str_r = "Calculation Parameters\n"
         str_r += "Lines Layer: " + self.roadLines.name() + "\n"
         str_r += "DEM Layer: " + self.DemLayer.name() + " Band:" + str(self.BandNo + 1) + "\n"
         str_r += "Sample Step: " + str(self.SampleStep) + " in " + str(self.DemLayer.crs().mapUnits())  + "\n"
         return str_r
+
+    def renderRasterValue(self, point):
+        val, res = self.DemLayer.dataProvider().sample(point , self.BandNo + 1)
+        if (res):
+            return val
+        else:
+            # print(point)
+            return None
       
 class CalculateTask(QgsTask): # тестовая версия задачи
-    bufResult = pyqtSignal(str)
+    printResult = pyqtSignal(str)
 
     def __init__(self, description, task_options):
         super().__init__(description, QgsTask.CanCancel)
         self.options = task_options
         self.result = None
+
+
+    def P2P_Calculation(self, p1, p2):
+        vector = p2-p1
+
+        count_points = 0
+        meanHeight = 0
+
+        if (vector.length() > self.options.SampleStep):
+            count_points = math.floor(vector.length() / self.options.SampleStep)
+            vector = vector.normalized()
+
+            current_point = p1
+            SlWindowMatrix = [[0] * 3 for _ in range(3)]
+            rasterX = self.options.DemLayer.rasterUnitsPerPixelX()
+            rasterY = self.options.DemLayer.rasterUnitsPerPixelY()
+
+            for _ in range(1,count_points):
+                current_point = current_point + vector*self.options.SampleStep
+
+                val = self.options.renderRasterValue(current_point)
+                if (val):
+                    meanHeight += val
+
+                print('----------------------------------')
+                # print(current_point)
+                for y in range(-1,2):
+                    for x in range(-1,2):
+                        buf_point = QgsPointXY(current_point)
+                        buf_point += QgsVector(rasterY*y, rasterX*x)
+                        val = self.options.renderRasterValue(buf_point)
+                        # print(val)
+                        SlWindowMatrix[y+1][x+1] = val
+                        # print(y,x)
+                        # print(buf_point)
+
+
+            # print(p.x())
+            # print(p.y())
+            for i in range(0,3):
+                print(SlWindowMatrix[i])
+
+        return (meanHeight , count_points)
     
-    def run(self): # основная функция задачи     
+    def run(self): # основная функция задачи  
         print('** Task run')
         current_progress = 0.0
 
         LineFeatures = self.options.roadLines.getFeatures() # QgsFeatureIterator
-
         if not LineFeatures.isValid(): # проверка на ошибки в получении объектов
+            self.printResult.emit("[" + self.description + "]: (ERROR) Not Valid iterator in vector layer")
             print("** Not Valid iterator")
             return False
         
-        step = 100 / self.options.roadLines.featureCount()
-        
+        step = 100 / self.options.roadLines.featureCount()        
         iterator = 0
 
         for LineFeature in LineFeatures: # проход по всем объектам слоя
-            
             if self.isCanceled():
                 return False
-
+     
             LineGeometry = None
             try:
                 LineGeometry = LineFeature.geometry().asMultiPolyline()
@@ -107,26 +169,39 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 else:
                     # полилиния = список точек => [i] => точка
                     length = len(LineGeometry)
-                    self.bufResult.emit("len points of PolyLine No" + str(iterator) + " : " + str(length))
-
-                    # for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
-                    #     print("LINE NO " + str(i))
-                    #     print(LineGeometry[i], end="")
-                    #     print(LineGeometry[i+1], end="\n")
+                    
+                    MeanHeight = 0
+                    PointsCount = 0
+                    for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
+                        res = self.P2P_Calculation(LineGeometry[i], LineGeometry[i+1])
+                        MeanHeight += res[0]
+                        PointsCount += res[1]
                         
-                    # print("- - - - - - - - - - - - - - -")
+                    with edit(self.options.roadLines):
+                        LineFeature.setAttribute(self.options.index , MeanHeight / PointsCount)
+                        self.options.roadLines.updateFeature(LineFeature)
+                    
             else:
                 # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
-                length = len(LineGeometry) # количество полилиний
-                self.bufResult.emit("Count of Polylines in MultiPolyLine No" + str(iterator) + ' = ' + str(length))
+                # нужна будет опция о разбиении мультиполилиний на множество полилиний в новом временном слое??
+                PolyLineIterator = 0
 
-                # PolyLineIterator = 0
+                MeanHeight = 0
+                PointsCount = 0
+                for PolyLine in LineGeometry:
+                    length = len(PolyLine)
 
-                # for PolyLine in LineGeometry:
-                #     length = len(PolyLine)
-                #     print("Count of Points in PolyLine No " , PolyLineIterator , length)
-                #     print("First point is " , PolyLine[0])
-                #     PolyLineIterator += 1
+                    for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
+                        res = self.P2P_Calculation(PolyLine[i], PolyLine[i+1])
+                        MeanHeight += res[0]
+                        PointsCount += res[1]
+                        print(MeanHeight)
+
+                    PolyLineIterator += 1
+                
+                with edit(self.options.roadLines):
+                    LineFeature.setAttribute(self.options.index , MeanHeight / PointsCount)
+                    self.options.roadLines.updateFeature(LineFeature)
                 
             iterator += 1
 
@@ -318,7 +393,7 @@ class RoadAnalysis:
     
     def runTask(self):
 
-        self.dlg.setLockGUI(True)
+        self.dlg.setGUILocked(False)
 
         self.dlg.textEdit_log.append("Запуск алгоритма " + TASK_DESCRIPTION )
         self.dlg.tabWidget.setCurrentIndex(1)
@@ -333,7 +408,7 @@ class RoadAnalysis:
         active_task = CalculateTask(TASK_DESCRIPTION, cur_opt)
 
 
-        active_task.bufResult.connect(self.info)
+        active_task.printResult.connect(self.info)
 
         self.task_manager.addTask(active_task)
         self.dlg.progressBar.setValue(0)
@@ -350,7 +425,7 @@ class RoadAnalysis:
             self.dlg.textEdit_log.append("Task No " + str(i) + " Finished with " + str(task.result))
             del task
         
-        self.dlg.setLockGUI(False)
+        self.dlg.setGUILocked(True)
         
         # print(len(self.task_manager.tasks()))
         # print(self.task_manager.count())
