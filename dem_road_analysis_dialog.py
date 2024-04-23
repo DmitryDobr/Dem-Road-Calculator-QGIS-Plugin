@@ -48,13 +48,13 @@ class RoadAnalysisDialog(QtWidgets.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.LineFeaturesCount = 0
-
         self.mMapLayerComboBox_lines.setFilters(QgsMapLayerProxyModel.LineLayer) # загрузка фильтра слоев в QgsMapLayerComboBox
         self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer) # загрузка фильтра слоев в QgsMapLayerComboBox
 
         self.mMapLayerComboBox_DEM.layerChanged.connect(self.RasterDemLayerChanged)
         self.RasterDemLayerChanged()
+
+        self.pushButton_clearLog.clicked.connect(self.textEdit_log.clear)
 
 
     def RasterDemLayerChanged(self):
@@ -66,9 +66,8 @@ class RoadAnalysisDialog(QtWidgets.QDialog, FORM_CLASS):
             for i in range(l.bandCount()):
                 self.comboBox_band.addItem(str(i+1))
     
-    def setLockGUI(self, flag = False):
+    def setGUILocked(self, flag = False):
         self.tabWidget.widget(0).setEnabled(flag)
         self.pushButton_start.setEnabled(flag)
-        pass
 
 

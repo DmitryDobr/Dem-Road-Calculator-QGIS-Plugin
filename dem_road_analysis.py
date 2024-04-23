@@ -45,6 +45,7 @@ from qgis.core import (
 )
 
 import math
+from enum import IntEnum
 
 
 # Initialize Qt resources from file resources.py
@@ -57,28 +58,41 @@ VERSION = Qgis.QGIS_VERSION
 MESSAGE_CATEGORY = "RoadTask"
 TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
 
+class OrtogonalGradientsCalculate(IntEnum):
+    ZEVERBERGEN = 0
+    AVERAGEWEIGHT = 1
+    _3FDWRSD = 2
 
 class DemRoadCalculationOptions():
-    def __init__(self, dem_layer, lines, step, band):
+    def __init__(self, dem_layer, lines, step, band, alg = 0, round = 2):
         self.DemLayer = dem_layer   # QgsRasterLayer
         self.roadLines = lines      # QgsVectorLayer
         self.SampleStep = step      # numerical step of sampling raster
         self.BandNo = band          # integer, number of band
+        self.gradientAlgorytm = OrtogonalGradientsCalculate(alg)
+        self.roundVal = round
 
-        self.index = self.roadLines.fields().lookupField("value_")
-        if (self.index == -1):
-            self.roadLines.dataProvider().addAttributes([QgsField("value_", QVariant.Double)])
+        # проверка векторного слоя на заполненность полей
+        self.HFieldIndex = self.roadLines.fields().lookupField("HeightVal_")
+        if (self.HFieldIndex == -1):
+            self.roadLines.dataProvider().addAttributes([QgsField("HeightVal_", QVariant.Double)])
             self.roadLines.updateFields()
-            self.index = self.options.roadLines.fields().lookupField("value_")
+            self.HFieldIndex = self.roadLines.fields().lookupField("HeightVal_")
 
-        
-        print(self.roadLines.crs().axisOrdering())
+        self.SFieldIndex = self.roadLines.fields().lookupField("SlopeVal_")
+        if (self.SFieldIndex == -1):
+            self.roadLines.dataProvider().addAttributes([QgsField("SlopeVal_", QVariant.Double)])
+            self.roadLines.updateFields()
+            self.SFieldIndex = self.roadLines.fields().lookupField("SlopeVal_")
+
+        # print(self.roadLines.crs().axisOrdering())
 
     def __str__(self):
         str_r = "Calculation Parameters\n"
         str_r += "Lines Layer: " + self.roadLines.name() + "\n"
         str_r += "DEM Layer: " + self.DemLayer.name() + " Band:" + str(self.BandNo + 1) + "\n"
         str_r += "Sample Step: " + str(self.SampleStep) + " in " + str(self.DemLayer.crs().mapUnits())  + "\n"
+        str_r += "Algorytm_id: " + str(self.gradientAlgorytm)
         return str_r
 
     def renderRasterValue(self, point):
@@ -86,7 +100,6 @@ class DemRoadCalculationOptions():
         if (res):
             return val
         else:
-            # print(point)
             return None
       
 class CalculateTask(QgsTask): # тестовая версия задачи
@@ -98,47 +111,65 @@ class CalculateTask(QgsTask): # тестовая версия задачи
         self.result = None
 
 
-    def P2P_Calculation(self, p1, p2):
+    def P2P_Calculation(self, p1, p2): # вычисление параметров между 2мя точками
         vector = p2-p1
 
         count_points = 0
-        meanHeight = 0
+        sumHeight = 0
+        SlopeSum = 0
 
         if (vector.length() > self.options.SampleStep):
-            count_points = math.floor(vector.length() / self.options.SampleStep)
-            vector = vector.normalized()
+            count_points = math.floor(vector.length() / self.options.SampleStep) # число точек на линии для замера
+            vector = vector.normalized() # направление от точки до точки
 
             current_point = p1
-            SlWindowMatrix = [[0] * 3 for _ in range(3)]
+            
             rasterX = self.options.DemLayer.rasterUnitsPerPixelX()
             rasterY = self.options.DemLayer.rasterUnitsPerPixelY()
 
             for _ in range(1,count_points):
-                current_point = current_point + vector*self.options.SampleStep
+                current_point = current_point + vector*self.options.SampleStep # очередная точка
 
-                val = self.options.renderRasterValue(current_point)
-                if (val):
-                    meanHeight += val
-
-                print('----------------------------------')
-                # print(current_point)
+                SlWindowMatrix = [[0] * 3 for _ in range(3)] # конструкция матрицы
+                # заполнение матрицы скользящего окна
                 for y in range(-1,2):
                     for x in range(-1,2):
-                        buf_point = QgsPointXY(current_point)
-                        buf_point += QgsVector(rasterY*y, rasterX*x)
+                        buf_point = QgsPointXY(current_point) # буферная точка
+                        buf_point += QgsVector(rasterY*y, rasterX*x) # смещение точки для заполнения матрицы
                         val = self.options.renderRasterValue(buf_point)
-                        # print(val)
+
                         SlWindowMatrix[y+1][x+1] = val
-                        # print(y,x)
-                        # print(buf_point)
+                
+                # вычисление уклона по перпендикулярным градиентам поверхности
+                fx = 0
+                fy = 0
 
+                if (self.options.gradientAlgorytm == OrtogonalGradientsCalculate._3FDWRSD):
+                    fx = (SlWindowMatrix[2][0] - SlWindowMatrix[2][2] + 
+                            2 * (SlWindowMatrix[1][0] - SlWindowMatrix[1][2]) +
+                            SlWindowMatrix[0][0] - SlWindowMatrix[0][2]) / (8 * rasterX)
+                    
+                    fy = (SlWindowMatrix[0][2] - SlWindowMatrix[2][2] +
+                            2 * (SlWindowMatrix[0][1] - SlWindowMatrix[2][1]) + 
+                            SlWindowMatrix[0][0] - SlWindowMatrix[2][0]) / (8 * rasterY)
+                    
+                elif (self.options.gradientAlgorytm == OrtogonalGradientsCalculate.AVERAGEWEIGHT):
+                    fx = 1/2 * ( ((SlWindowMatrix[0][2]+SlWindowMatrix[1][2]+SlWindowMatrix[2][2]) / 3 - 
+                                  (SlWindowMatrix[0][0]+SlWindowMatrix[1][0]+SlWindowMatrix[2][0]) / 3 ) / rasterX)
 
-            # print(p.x())
-            # print(p.y())
-            for i in range(0,3):
-                print(SlWindowMatrix[i])
+                    fy = 1/2 * ( ((SlWindowMatrix[0][0]+SlWindowMatrix[0][1]+SlWindowMatrix[0][2]) / 3 - 
+                                  (SlWindowMatrix[2][0]+SlWindowMatrix[2][1]+SlWindowMatrix[2][2]) / 3 ) / rasterY)
+                    
+                elif (self.options.gradientAlgorytm == OrtogonalGradientsCalculate.ZEVERBERGEN):
+                    fx = 1/2 * ( (SlWindowMatrix[1][2] - SlWindowMatrix[1][0]) / rasterX)
+                    fy = 1/2 * ( (SlWindowMatrix[0][1] - SlWindowMatrix[2][1]) / rasterY)
 
-        return (meanHeight , count_points)
+                SlopeVal = math.atan(math.sqrt(pow(fx,2) + pow(fy,2)))
+                SlopeSum += SlopeVal
+
+                sumHeight += SlWindowMatrix[1][2]
+
+        return (sumHeight , SlopeSum , count_points)
     
     def run(self): # основная функция задачи  
         print('** Task run')
@@ -146,8 +177,12 @@ class CalculateTask(QgsTask): # тестовая версия задачи
 
         LineFeatures = self.options.roadLines.getFeatures() # QgsFeatureIterator
         if not LineFeatures.isValid(): # проверка на ошибки в получении объектов
-            self.printResult.emit("[" + self.description + "]: (ERROR) Not Valid iterator in vector layer")
+            self.printResult.emit("[" + TASK_DESCRIPTION + "]: (ERROR) Not Valid iterator in vector layer")
             print("** Not Valid iterator")
+            return False
+
+        if (self.options.roadLines.featureCount() == 0):
+            self.printResult.emit("[" + TASK_DESCRIPTION + "]: (ERROR) Zero Geometry")
             return False
         
         step = 100 / self.options.roadLines.featureCount()        
@@ -156,7 +191,9 @@ class CalculateTask(QgsTask): # тестовая версия задачи
         for LineFeature in LineFeatures: # проход по всем объектам слоя
             if self.isCanceled():
                 return False
-     
+
+            self.printResult.emit("feature no " + str(iterator))
+
             LineGeometry = None
             try:
                 LineGeometry = LineFeature.geometry().asMultiPolyline()
@@ -164,29 +201,37 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 try:
                     LineGeometry = LineFeature.geometry().asPolyline()
                 except TypeError:
-                    print("** No Valid Geometry")
+                    self.printResult.emit("** No Valid Geometry")
+                    print("[" + TASK_DESCRIPTION + "]: (ERROR) No Valid Geometry")
                     return False
                 else:
+                    self.printResult.emit("accesing polyline")
                     # полилиния = список точек => [i] => точка
                     length = len(LineGeometry)
                     
                     MeanHeight = 0
+                    MeanSlope = 0
                     PointsCount = 0
                     for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
                         res = self.P2P_Calculation(LineGeometry[i], LineGeometry[i+1])
                         MeanHeight += res[0]
-                        PointsCount += res[1]
+                        MeanSlope += res[1]
+                        PointsCount += res[2]
                         
+
                     with edit(self.options.roadLines):
-                        LineFeature.setAttribute(self.options.index , MeanHeight / PointsCount)
+                        LineFeature.setAttribute(self.options.HFieldIndex , MeanHeight / PointsCount)
+                        LineFeature.setAttribute(self.options.SFieldIndex , MeanSlope / PointsCount)
                         self.options.roadLines.updateFeature(LineFeature)
-                    
             else:
                 # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
                 # нужна будет опция о разбиении мультиполилиний на множество полилиний в новом временном слое??
+                self.printResult.emit("accesing multipolyline")
+                
                 PolyLineIterator = 0
 
                 MeanHeight = 0
+                MeanSlope = 0
                 PointsCount = 0
                 for PolyLine in LineGeometry:
                     length = len(PolyLine)
@@ -194,17 +239,20 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                     for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
                         res = self.P2P_Calculation(PolyLine[i], PolyLine[i+1])
                         MeanHeight += res[0]
-                        PointsCount += res[1]
-                        print(MeanHeight)
+                        MeanSlope += res[1]
+                        PointsCount += res[2]
 
                     PolyLineIterator += 1
                 
                 with edit(self.options.roadLines):
-                    LineFeature.setAttribute(self.options.index , MeanHeight / PointsCount)
+                    LineFeature.setAttribute(self.options.HFieldIndex , round(MeanHeight / PointsCount, self.options.roundVal))
+                    LineFeature.setAttribute(self.options.SFieldIndex , round(MeanSlope / PointsCount, self.options.roundVal))
                     self.options.roadLines.updateFeature(LineFeature)
+                    self.printResult.emit("update fields")
                 
             iterator += 1
-
+            self.printResult.emit("done")
+                                  
             current_progress += step
             self.setProgress(round(current_progress))
 
@@ -398,10 +446,13 @@ class RoadAnalysis:
         self.dlg.textEdit_log.append("Запуск алгоритма " + TASK_DESCRIPTION )
         self.dlg.tabWidget.setCurrentIndex(1)
 
+        # конструкция параметров задачи
         cur_opt = DemRoadCalculationOptions(self.dlg.mMapLayerComboBox_DEM.currentLayer(), 
                                             self.dlg.mMapLayerComboBox_lines.currentLayer(),
                                             self.dlg.doubleSpinBox_sample.value(),
-                                            self.dlg.comboBox_band.currentIndex())
+                                            self.dlg.comboBox_band.currentIndex(),
+                                            self.dlg.comboBox_algorytm.currentIndex(),
+                                            self.dlg.spinBox_roundVal.value())
         
         self.dlg.textEdit_log.append(str(cur_opt))
 
