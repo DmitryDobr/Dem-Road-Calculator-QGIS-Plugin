@@ -32,6 +32,7 @@ from qgis.core import (
     QgsVectorLayer, 
     QgsRasterLayer,
     QgsMapLayer,
+    QgsGeometry,
     QgsFeature, 
     QgsFeatureIterator, 
     QgsPointXY, 
@@ -57,6 +58,36 @@ import os.path
 VERSION = Qgis.QGIS_VERSION
 MESSAGE_CATEGORY = "RoadTask"
 TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
+
+class VectorPointCreator():
+    def __init__(self):
+        self.vl = QgsVectorLayer("Point", "temporary_points", "memory")
+        self.pr = self.vl.dataProvider()
+
+        crs = self.vl.crs()
+        crs.createFromId(3857)
+        self.vl.setCrs(crs)
+        
+        self.vl.startEditing()
+        # add fields
+        self.pr.addAttributes( [ 
+                    QgsField("slope_",  QVariant.Double),
+                    QgsField("aspect_", QVariant.Double)
+                ] )
+        self.vl.commitChanges()
+
+        QgsProject.instance().addMapLayer(self.vl)
+
+    def addPoint(self, point, slope, aspect): # QgsPointXY
+        self.vl.startEditing()
+
+        feature = QgsFeature()
+        feature.setGeometry( QgsGeometry.fromPointXY(point) )
+        feature.setAttributes([slope,aspect])
+        self.pr.addFeatures( [ feature ] )
+
+        self.vl.commitChanges()
+
 
 class OrtogonalGradientsCalculate(IntEnum):
     ZEVERBERGEN = 0
@@ -85,6 +116,12 @@ class DemRoadCalculationOptions():
             self.roadLines.updateFields()
             self.SFieldIndex = self.roadLines.fields().lookupField("SlopeVal_")
 
+        self.AFieldIndex = self.roadLines.fields().lookupField("AspectVal_")
+        if (self.AFieldIndex == -1):
+            self.roadLines.dataProvider().addAttributes([QgsField("AspectVal_", QVariant.Double)])
+            self.roadLines.updateFields()
+            self.AFieldIndex = self.roadLines.fields().lookupField("AspectVal_")
+
         # print(self.roadLines.crs().axisOrdering())
 
     def __str__(self):
@@ -110,6 +147,8 @@ class CalculateTask(QgsTask): # тестовая версия задачи
         self.options = task_options
         self.result = None
 
+        self.vectorEdit = VectorPointCreator()
+
 
     def P2P_Calculation(self, p1, p2): # вычисление параметров между 2мя точками
         vector = p2-p1
@@ -117,6 +156,7 @@ class CalculateTask(QgsTask): # тестовая версия задачи
         count_points = 0
         sumHeight = 0
         SlopeSum = 0
+        AspectSum = 0
 
         if (vector.length() > self.options.SampleStep):
             count_points = math.floor(vector.length() / self.options.SampleStep) # число точек на линии для замера
@@ -127,7 +167,7 @@ class CalculateTask(QgsTask): # тестовая версия задачи
             rasterX = self.options.DemLayer.rasterUnitsPerPixelX()
             rasterY = self.options.DemLayer.rasterUnitsPerPixelY()
 
-            for _ in range(1,count_points):
+            for i in range(1,count_points):
                 current_point = current_point + vector*self.options.SampleStep # очередная точка
 
                 SlWindowMatrix = [[0] * 3 for _ in range(3)] # конструкция матрицы
@@ -135,11 +175,15 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 for y in range(-1,2):
                     for x in range(-1,2):
                         buf_point = QgsPointXY(current_point) # буферная точка
-                        buf_point += QgsVector(rasterY*y, rasterX*x) # смещение точки для заполнения матрицы
+                        buf_point += QgsVector(rasterX*x, -rasterY*y) # смещение точки для заполнения матрицы
                         val = self.options.renderRasterValue(buf_point)
 
                         SlWindowMatrix[y+1][x+1] = val
-                
+
+                if (i == 1):
+                    print(current_point)
+                    print(SlWindowMatrix)
+
                 # вычисление уклона по перпендикулярным градиентам поверхности
                 fx = 0
                 fy = 0
@@ -152,24 +196,61 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                     fy = (SlWindowMatrix[0][2] - SlWindowMatrix[2][2] +
                             2 * (SlWindowMatrix[0][1] - SlWindowMatrix[2][1]) + 
                             SlWindowMatrix[0][0] - SlWindowMatrix[2][0]) / (8 * rasterY)
-                    
                 elif (self.options.gradientAlgorytm == OrtogonalGradientsCalculate.AVERAGEWEIGHT):
                     fx = 1/2 * ( ((SlWindowMatrix[0][2]+SlWindowMatrix[1][2]+SlWindowMatrix[2][2]) / 3 - 
                                   (SlWindowMatrix[0][0]+SlWindowMatrix[1][0]+SlWindowMatrix[2][0]) / 3 ) / rasterX)
 
                     fy = 1/2 * ( ((SlWindowMatrix[0][0]+SlWindowMatrix[0][1]+SlWindowMatrix[0][2]) / 3 - 
-                                  (SlWindowMatrix[2][0]+SlWindowMatrix[2][1]+SlWindowMatrix[2][2]) / 3 ) / rasterY)
-                    
+                                  (SlWindowMatrix[2][0]+SlWindowMatrix[2][1]+SlWindowMatrix[2][2]) / 3 ) / rasterY)    
                 elif (self.options.gradientAlgorytm == OrtogonalGradientsCalculate.ZEVERBERGEN):
                     fx = 1/2 * ( (SlWindowMatrix[1][2] - SlWindowMatrix[1][0]) / rasterX)
                     fy = 1/2 * ( (SlWindowMatrix[0][1] - SlWindowMatrix[2][1]) / rasterY)
 
-                SlopeVal = math.atan(math.sqrt(pow(fx,2) + pow(fy,2)))
+                SlopeVal = math.atan(math.sqrt(pow(fx,2) + pow(fy,2))) * 57.29578 # * 57.29578 - перевод в градусы?
+                
+                # вычисление экспозиции 
+                wght1 = ((SlWindowMatrix[0][2] != None if 1 else 0) + 
+                         2*(SlWindowMatrix[1][2] != None if 1 else 0) + 
+                         (SlWindowMatrix[2][2] != None if 1 else 0))
+                
+                wght2 = ((SlWindowMatrix[0][0] != None if 1 else 0) + 
+                         2*(SlWindowMatrix[1][0] != None if 1 else 0) + 
+                         (SlWindowMatrix[2][0] != None if 1 else 0))
+                
+                wght3 = ((SlWindowMatrix[2][0] != None if 1 else 0) + 
+                         2*(SlWindowMatrix[2][1] != None if 1 else 0) + 
+                         (SlWindowMatrix[2][2] != None if 1 else 0))
+
+                wght4 = ((SlWindowMatrix[0][0] != None if 1 else 0) + 
+                         2*(SlWindowMatrix[0][1] != None if 1 else 0) + 
+                         (SlWindowMatrix[0][2] != None if 1 else 0))
+
+                
+                fx = ((SlWindowMatrix[0][2] + 2*SlWindowMatrix[1][2] + SlWindowMatrix[2][2]) * 4 / wght1
+                     - (SlWindowMatrix[0][0] + 2*SlWindowMatrix[1][0] + SlWindowMatrix[2][0]) * 4 / wght2)
+
+                fy = ((SlWindowMatrix[2][0] + 2*SlWindowMatrix[2][1] + SlWindowMatrix[2][2]) * 4 / wght3
+                     - (SlWindowMatrix[0][0] + 2*SlWindowMatrix[0][1] + SlWindowMatrix[0][2]) * 4 / wght4)
+                
+                
+                AspectVal = (180/math.pi) * math.atan2(fy, -fx)
+                
+                if AspectVal < 0:
+                    AspectVal = 90.0 - AspectVal
+                elif AspectVal > 90.0:
+                    AspectVal = 360.0 - AspectVal + 90.0
+                else:
+                    AspectVal = 90.0 - AspectVal
+
+                print(AspectVal)
+
+                self.vectorEdit.addPoint(current_point, SlopeVal, AspectVal)
+
                 SlopeSum += SlopeVal
-
+                AspectSum += AspectVal
                 sumHeight += SlWindowMatrix[1][2]
-
-        return (sumHeight , SlopeSum , count_points)
+        
+        return (sumHeight , SlopeSum , AspectSum, count_points)
     
     def run(self): # основная функция задачи  
         print('** Task run')
@@ -227,26 +308,31 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
                 # нужна будет опция о разбиении мультиполилиний на множество полилиний в новом временном слое??
                 self.printResult.emit("accesing multipolyline")
+                print('------')
                 
                 PolyLineIterator = 0
 
-                MeanHeight = 0
-                MeanSlope = 0
+                SumHeight = 0
+                SumSlope = 0
+                SumAspect = 0
                 PointsCount = 0
+
                 for PolyLine in LineGeometry:
                     length = len(PolyLine)
 
                     for i in range(0,length-1): # пересчет линий в объекте в представлении как точка начала и точка конца
                         res = self.P2P_Calculation(PolyLine[i], PolyLine[i+1])
-                        MeanHeight += res[0]
-                        MeanSlope += res[1]
-                        PointsCount += res[2]
+                        SumHeight += res[0]
+                        SumSlope += res[1]
+                        SumAspect += res[2]
+                        PointsCount += res[3]
 
                     PolyLineIterator += 1
-                
+
                 with edit(self.options.roadLines):
-                    LineFeature.setAttribute(self.options.HFieldIndex , round(MeanHeight / PointsCount, self.options.roundVal))
-                    LineFeature.setAttribute(self.options.SFieldIndex , round(MeanSlope / PointsCount, self.options.roundVal))
+                    LineFeature.setAttribute(self.options.HFieldIndex , round(SumHeight / PointsCount, self.options.roundVal))
+                    LineFeature.setAttribute(self.options.SFieldIndex , round(SumSlope / PointsCount, self.options.roundVal))
+                    LineFeature.setAttribute(self.options.AFieldIndex , round(SumAspect / PointsCount, self.options.roundVal))
                     self.options.roadLines.updateFeature(LineFeature)
                     self.printResult.emit("update fields")
                 
@@ -440,7 +526,7 @@ class RoadAnalysis:
             pass
     
     def runTask(self):
-
+        
         self.dlg.setGUILocked(False)
 
         self.dlg.textEdit_log.append("Запуск алгоритма " + TASK_DESCRIPTION )

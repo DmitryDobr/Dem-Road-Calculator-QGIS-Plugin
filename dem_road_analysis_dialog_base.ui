@@ -76,7 +76,7 @@
       <string notr="true"/>
      </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tab_params">
       <property name="styleSheet">
@@ -89,7 +89,7 @@
        <item row="0" column="0">
         <widget class="QLabel" name="label">
          <property name="text">
-          <string>Слой автодорог</string>
+          <string>Слой дорог</string>
          </property>
         </widget>
        </item>
