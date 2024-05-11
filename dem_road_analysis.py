@@ -59,6 +59,7 @@ VERSION = Qgis.QGIS_VERSION
 MESSAGE_CATEGORY = "RoadTask"
 TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
 
+# возможно временное решение
 class VectorPointCreator():
     def __init__(self):
         self.vl = QgsVectorLayer("Point", "temporary_points", "memory")
@@ -71,6 +72,7 @@ class VectorPointCreator():
         self.vl.startEditing()
         # add fields
         self.pr.addAttributes( [ 
+                    QgsField("height_",  QVariant.Double),
                     QgsField("slope_",  QVariant.Double),
                     QgsField("aspect_", QVariant.Double)
                 ] )
@@ -78,12 +80,12 @@ class VectorPointCreator():
 
         QgsProject.instance().addMapLayer(self.vl)
 
-    def addPoint(self, point, slope, aspect): # QgsPointXY
+    def addPoint(self, point, height, slope, aspect): # QgsPointXY
         self.vl.startEditing()
 
         feature = QgsFeature()
         feature.setGeometry( QgsGeometry.fromPointXY(point) )
-        feature.setAttributes([slope,aspect])
+        feature.setAttributes([height,slope,aspect])
         self.pr.addFeatures( [ feature ] )
 
         self.vl.commitChanges()
@@ -180,10 +182,6 @@ class CalculateTask(QgsTask): # тестовая версия задачи
 
                         SlWindowMatrix[y+1][x+1] = val
 
-                if (i == 1):
-                    print(current_point)
-                    print(SlWindowMatrix)
-
                 # вычисление уклона по перпендикулярным градиентам поверхности
                 fx = 0
                 fy = 0
@@ -242,15 +240,15 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 else:
                     AspectVal = 90.0 - AspectVal
 
-                print(AspectVal)
+                # print(AspectVal)
 
-                self.vectorEdit.addPoint(current_point, SlopeVal, AspectVal)
+                self.vectorEdit.addPoint(current_point, SlWindowMatrix[1][2], SlopeVal, AspectVal)
 
                 SlopeSum += SlopeVal
                 AspectSum += AspectVal
                 sumHeight += SlWindowMatrix[1][2]
         
-        return (sumHeight , SlopeSum , AspectSum, count_points)
+        return (sumHeight , SlopeSum , AspectSum, count_points - 1)
     
     def run(self): # основная функция задачи  
         print('** Task run')
@@ -308,7 +306,7 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                 # мультиполилиния = список полилиний => [i] => полилиния = список точек => [j] => точка
                 # нужна будет опция о разбиении мультиполилиний на множество полилиний в новом временном слое??
                 self.printResult.emit("accesing multipolyline")
-                print('------')
+                print('---------------------------------------------')
                 
                 PolyLineIterator = 0
 
@@ -328,6 +326,8 @@ class CalculateTask(QgsTask): # тестовая версия задачи
                         PointsCount += res[3]
 
                     PolyLineIterator += 1
+
+                print(SumSlope, SumAspect, PointsCount)
 
                 with edit(self.options.roadLines):
                     LineFeature.setAttribute(self.options.HFieldIndex , round(SumHeight / PointsCount, self.options.roundVal))
