@@ -1,9 +1,9 @@
 #/***************************************************************************
-# RoadAnalysis
+# DemRoadCalculator
 #
-# Plugin for road analysis with DEM info
+# Calculate slope and aspect road lines using DEM
 #							 -------------------
-#		begin				: 2024-03-26
+#		begin				: 2024-08-03
 #		git sha				: $Format:%H$
 #		copyright			: (C) 2024 by Dmitry D.
 #		email				: dmitrdobr@mail.ru
@@ -38,15 +38,15 @@ LOCALES =
 # translation
 SOURCES = \
 	__init__.py \
-	dem_road_analysis.py dem_road_analysis_dialog.py
+	dem_road_calculator.py dem_road_calculator_dialog.py
 
-PLUGINNAME = dem_road_analysis
+PLUGINNAME = dem_road_calculator
 
 PY_FILES = \
 	__init__.py \
-	dem_road_analysis.py dem_road_analysis_dialog.py
+	dem_road_calculator.py dem_road_calculator_dialog.py
 
-UI_FILES = dem_road_analysis_dialog_base.ui
+UI_FILES = dem_road_calculator_dialog_base.ui
 
 EXTRAS = metadata.txt icon.png
 

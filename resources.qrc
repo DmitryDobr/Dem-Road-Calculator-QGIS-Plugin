@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/dem_road_analysis" >
+    <qresource prefix="/plugins/dem_road_calculator" >
         <file>icon.png</file>
     </qresource>
 </RCC>
