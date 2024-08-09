@@ -60,8 +60,7 @@ MESSAGE_CATEGORY = "RoadTask"
 TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
 
 class LineWrapper(): 
-    # TODO 
-    # wrapper for Line Geometry to get Points from 
+    # TODO - wrapper for Line Geometry to get Points from 
     # different line geometry types
 
     def __init__(self, lineGeometry):
@@ -79,18 +78,57 @@ class LineWrapper():
                 self.Multiline = False
         else:
             self.Multiline = True
+
+        self.currentIndexPoint = -1 # current Id of original point of geometry
+        self.currentIndexPart = -1 # current Id of part of MultiPolyLine
+        self.currentVector = None # current vector on which need to find new point
+        self.currentPoint = None
+
+        self.nextPart()
     
-    def nextPointAt(self, meters):
-        #return (true, QgsPoint())
-        #return (false, int)
-        pass
+    def nextPointOnGeometryAt(self, meters):
+        if (self.Multiline): # QgsMultiPolyLine
+            pass
+        else: # QgsPolyLine
+            newPoint = None
+            toAdd = meters 
+            flag = False
+
+            while meters > 0:
+                if (flag):
+                    if (not self.nextPart()):
+                        return False
+                    toAdd = meters
+                
+                meters = meters - self.currentVector.length()
+                flag = True
+
+            newPoint = self.currentPoint + self.currentVector.normalized() * toAdd
+            self.currentVector = self.LineGeometry[self.currentIndexPoint + 1] - newPoint
+            self.currentPoint = newPoint
+
+            return True
+            
+    def getCurrentPoint(self):
+        return self.currentPoint 
+            
+    def nextPart(self):
+        if (self.Multiline): # QgsMultiPolyLine
+            pass
+        else: # QgsPolyLine
+            if (self.currentIndexPoint + 2 < len(self.LineGeometry)):
+                self.currentIndexPoint += 1
+                self.currentPoint = self.LineGeometry[self.currentIndexPoint]
+                self.currentVector = self.LineGeometry[self.currentIndexPoint + 1] - self.currentPoint
+                return True
+            else:
+                return False
 
 class CalculateTask(QgsTask):
     def __init__(self, description, features):
         super().__init__(description, QgsTask.CanCancel)
 
         self.wrappedLinesList = features
-        pass
 
 
     def run(self): # основная функция задачи  
@@ -106,6 +144,11 @@ class CalculateTask(QgsTask):
             else:
                 print("* This is PolyLine")
             
+
+            while(feature.nextPointOnGeometryAt(100)):
+                print(feature.getCurrentPoint())
+
+
         return True
     
     def finished(self, result): # завершение задачи
@@ -295,7 +338,11 @@ class DemRoadCalculator:
     def WrapLines(self, vector_layer):
         lines_list = []
         for geom in vector_layer.getFeatures():
-            lines_list.append(LineWrapper(geom.geometry()))
+            wrapper = LineWrapper(geom.geometry())
+            # print(wrapper.LineGeometry)
+
+            lines_list.append(wrapper)
+
         return lines_list
 
     def runTask(self):
