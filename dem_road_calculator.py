@@ -62,6 +62,7 @@ TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
 class LineWrapper(): 
     # TODO - wrapper for Line Geometry to get Points from 
     # different line geometry types
+    # - modify wrapper functions for QgsMultiPolyLine
 
     def __init__(self, lineGeometry):
         self.LineGeometry = None
@@ -124,12 +125,29 @@ class LineWrapper():
             else:
                 return False
 
+class VectorBuilder(QgsTask):
+    # TODO - class which creates vector objects in given layer
+    # with given fields
+    def __init__(self, description):
+        super().__init__(description, QgsTask.CanCancel)
+        pass
+
+    def run(self):
+        return True
+    
+    def finished(self, result): # завершение задачи
+        print('*** [VectorBuilder] Task Ended with ' + str(result))
+        self.result = result
+
 class CalculateTask(QgsTask):
     def __init__(self, description, features):
         super().__init__(description, QgsTask.CanCancel)
 
         self.wrappedLinesList = features
 
+    # TODO - during run method get points from wrappers
+    # and define raster values in points
+    # then activate new VectorBuilder task for new points of each line object
 
     def run(self): # основная функция задачи  
         print('** Task run')
@@ -152,7 +170,7 @@ class CalculateTask(QgsTask):
         return True
     
     def finished(self, result): # завершение задачи
-        print('*** Task Ended with ' + str(result))
+        print('*** [CalculateTask]  Task Ended with ' + str(result))
         self.result = result
        
     def cancel(self): # отмена задачи
