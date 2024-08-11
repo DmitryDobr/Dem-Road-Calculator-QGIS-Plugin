@@ -28,8 +28,8 @@ class _3x3WindowMatrix():
             return self.matrix[row][col]
 
 
-def _WGHT(matrix: _3x3WindowMatrix, g):
-     # вычисление экспозиции 
+def _WGHT(matrix: _3x3WindowMatrix):
+     # aspect gradients calculation
       wght1 = ((matrix.z(7) != None if 1 else 0) + 
             2*(matrix.z(4) != None if 1 else 0) + 
             (matrix.z(1) != None if 1 else 0))

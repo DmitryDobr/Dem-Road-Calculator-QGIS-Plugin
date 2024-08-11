@@ -6,15 +6,35 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>626</width>
-    <height>494</height>
+    <width>625</width>
+    <height>608</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dem Road Calculator</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">
-   <item row="7" column="0">
+   <item row="7" column="1">
+    <widget class="QRadioButton" name="radioButton_option_multigeom_1">
+     <property name="text">
+      <string>Every part of multigeometry is different object</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="1">
+    <widget class="Line" name="line_2">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="11" column="1">
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -27,21 +47,28 @@
      </property>
     </spacer>
    </item>
-   <item row="10" column="0">
+   <item row="15" column="1">
     <widget class="QProgressBar" name="progressBar">
      <property name="value">
       <number>0</number>
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
+   <item row="0" column="1">
     <widget class="QLabel" name="label_3">
      <property name="text">
       <string>Input Layers</string>
      </property>
     </widget>
    </item>
-   <item row="6" column="0">
+   <item row="12" column="1">
+    <widget class="QPushButton" name="pushButton_start">
+     <property name="text">
+      <string>Run</string>
+     </property>
+    </widget>
+   </item>
+   <item row="10" column="1">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <property name="leftMargin">
       <number>5</number>
@@ -134,14 +161,14 @@
      </item>
     </layout>
    </item>
-   <item row="2" column="0">
-    <widget class="Line" name="line">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+   <item row="13" column="1">
+    <widget class="QPushButton" name="pushButton_deb">
+     <property name="text">
+      <string>debug</string>
      </property>
     </widget>
    </item>
-   <item row="4" column="0">
+   <item row="5" column="1">
     <layout class="QGridLayout" name="gridLayout_2">
      <item row="1" column="2">
       <widget class="QCheckBox" name="checkBox_val_hgt">
@@ -257,7 +284,7 @@
      </item>
     </layout>
    </item>
-   <item row="5" column="0">
+   <item row="9" column="1">
     <layout class="QHBoxLayout" name="horizontalLayout_2">
      <property name="leftMargin">
       <number>5</number>
@@ -316,7 +343,7 @@
      </item>
     </layout>
    </item>
-   <item row="1" column="0">
+   <item row="1" column="1">
     <layout class="QGridLayout" name="gridLayout">
      <item row="0" column="0">
       <widget class="QLabel" name="label">
@@ -340,7 +367,14 @@
      </item>
     </layout>
    </item>
-   <item row="9" column="0">
+   <item row="8" column="1">
+    <widget class="QRadioButton" name="radioButton_option_multigeom_2">
+     <property name="text">
+      <string>Multigeometry is one object</string>
+     </property>
+    </widget>
+   </item>
+   <item row="14" column="1">
     <widget class="QDialogButtonBox" name="button_box">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -350,17 +384,20 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="0">
+   <item row="4" column="1">
     <widget class="QLabel" name="label_4">
      <property name="text">
       <string>Settings</string>
      </property>
     </widget>
    </item>
-   <item row="8" column="0">
-    <widget class="QPushButton" name="pushButton_start">
-     <property name="text">
-      <string>Run</string>
+   <item row="2" column="1">
+    <widget class="Line" name="line_3">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>

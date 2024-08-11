@@ -67,7 +67,7 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
             for i in range(l.bandCount()):
                 self.comboBox_band.addItem(str(i+1))
     
-    def setGUILocked(self, flag):
+    def setGUIEnabled(self, flag):
         # self.tabWidget.widget(0).setEnabled(flag)
-        # self.pushButton_start.setEnabled(flag)
+        self.pushButton_start.setEnabled(flag)
         pass
