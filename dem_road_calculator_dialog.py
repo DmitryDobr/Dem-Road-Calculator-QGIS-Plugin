@@ -51,21 +51,45 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mMapLayerComboBox_lines.setFilters(QgsMapLayerProxyModel.LineLayer) # загрузка фильтра слоев в QgsMapLayerComboBox
         self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer) # загрузка фильтра слоев в QgsMapLayerComboBox
 
-        self.mMapLayerComboBox_DEM.layerChanged.connect(self.RasterDemLayerChanged)
-        self.RasterDemLayerChanged()
-
-        self.checkBox_val_hgt.toggled.connect(self.lineEdit_val_hgt.setEnabled)
-        self.checkBox_val_slope.toggled.connect(self.lineEdit_val_slope.setEnabled)
-        self.checkBox_val_aspect.toggled.connect(self.lineEdit_val_aspect.setEnabled)
+        self.mRasterBandComboBox.setLayer(self.mMapLayerComboBox_DEM.currentLayer())
     
-    def RasterDemLayerChanged(self):
-        self.comboBox_band.clear()
+    def getTaskOptions(self):
+        params = []
+        # selected layers and params
+        params.append(self.mMapLayerComboBox_lines.currentLayer())
+        params.append(self.mMapLayerComboBox_DEM.currentLayer())
+        params.append(self.mRasterBandComboBox.currentBand())
+        params.append(self.doubleSpinBox_sample.value())
+        params.append(self.comboBox_algorytm.currentIndex())
+        params.append(self.spinBox_roundVal.value())
 
-        l = self.mMapLayerComboBox_DEM.currentLayer()
+        vector_fields = dict()
+        hgt_field_name = '_hgt'
+        slope_field_name = '_slope'
+        aspect_field_name = '_aspect'
 
-        if (type(l) is QgsRasterLayer):
-            for i in range(l.bandCount()):
-                self.comboBox_band.addItem(str(i+1))
+        # selected values to calculate
+        if (self.checkBox_val_hgt.isChecked()):
+            if (not self.lineEdit_val_hgt.text().isEmpty):
+                hgt_field_name = self.lineEdit_val_hgt.text()
+                vector_fields['_hgt'] = hgt_field_name
+
+        if (self.checkBox_val_slope.isChecked()):
+            if (not self.lineEdit_val_slope.text().isEmpty):
+                slope_field_name = self.lineEdit_val_slope.text()
+                vector_fields['_slope'] = slope_field_name
+
+        if (self.checkBox_val_aspect.isChecked()):
+            if (not self.lineEdit_val_aspect.text().isEmpty):
+                aspect_field_name = self.lineEdit_val_aspect.text()
+                vector_fields['_aspect'] = aspect_field_name
+
+        params.append(vector_fields)
+
+        return params
+
+        
+
     
     def setGUIEnabled(self, flag):
         # self.tabWidget.widget(0).setEnabled(flag)

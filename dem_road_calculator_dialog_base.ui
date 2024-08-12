@@ -17,7 +17,7 @@
    <item row="7" column="1">
     <widget class="QRadioButton" name="radioButton_option_multigeom_1">
      <property name="text">
-      <string>Every part of multigeometry is different object</string>
+      <string>Every part of one multigeometry object is different object</string>
      </property>
      <property name="checked">
       <bool>true</bool>
@@ -34,7 +34,7 @@
      </property>
     </widget>
    </item>
-   <item row="11" column="1">
+   <item row="12" column="1">
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -47,7 +47,7 @@
      </property>
     </spacer>
    </item>
-   <item row="15" column="1">
+   <item row="16" column="1">
     <widget class="QProgressBar" name="progressBar">
      <property name="value">
       <number>0</number>
@@ -61,14 +61,14 @@
      </property>
     </widget>
    </item>
-   <item row="12" column="1">
+   <item row="13" column="1">
     <widget class="QPushButton" name="pushButton_start">
      <property name="text">
       <string>Run</string>
      </property>
     </widget>
    </item>
-   <item row="10" column="1">
+   <item row="11" column="1">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <property name="leftMargin">
       <number>5</number>
@@ -161,12 +161,81 @@
      </item>
     </layout>
    </item>
-   <item row="13" column="1">
+   <item row="14" column="1">
     <widget class="QPushButton" name="pushButton_deb">
      <property name="text">
       <string>debug</string>
      </property>
     </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="Line" name="line_3">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="10" column="1">
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <property name="leftMargin">
+      <number>5</number>
+     </property>
+     <property name="topMargin">
+      <number>5</number>
+     </property>
+     <property name="rightMargin">
+      <number>5</number>
+     </property>
+     <property name="bottomMargin">
+      <number>5</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="label_13">
+       <property name="text">
+        <string>Calculation step (m)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDoubleSpinBox" name="doubleSpinBox_sample">
+       <property name="minimum">
+        <double>1.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>100.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_14">
+       <property name="text">
+        <string>Raster band no.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QgsRasterBandComboBox" name="mRasterBandComboBox"/>
+     </item>
+    </layout>
    </item>
    <item row="5" column="1">
     <layout class="QGridLayout" name="gridLayout_2">
@@ -284,64 +353,12 @@
      </item>
     </layout>
    </item>
-   <item row="9" column="1">
-    <layout class="QHBoxLayout" name="horizontalLayout_2">
-     <property name="leftMargin">
-      <number>5</number>
+   <item row="8" column="1">
+    <widget class="QRadioButton" name="radioButton_option_multigeom_2">
+     <property name="text">
+      <string>Multigeometry objects as one object, different multigeometry is different objects</string>
      </property>
-     <property name="topMargin">
-      <number>5</number>
-     </property>
-     <property name="rightMargin">
-      <number>5</number>
-     </property>
-     <property name="bottomMargin">
-      <number>5</number>
-     </property>
-     <item>
-      <widget class="QLabel" name="label_13">
-       <property name="text">
-        <string>Calculation step (m)</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QDoubleSpinBox" name="doubleSpinBox_sample">
-       <property name="minimum">
-        <double>1.000000000000000</double>
-       </property>
-       <property name="maximum">
-        <double>1000.000000000000000</double>
-       </property>
-       <property name="value">
-        <double>100.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QLabel" name="label_14">
-       <property name="text">
-        <string>Raster band no.</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="comboBox_band"/>
-     </item>
-    </layout>
+    </widget>
    </item>
    <item row="1" column="1">
     <layout class="QGridLayout" name="gridLayout">
@@ -367,14 +384,7 @@
      </item>
     </layout>
    </item>
-   <item row="8" column="1">
-    <widget class="QRadioButton" name="radioButton_option_multigeom_2">
-     <property name="text">
-      <string>Multigeometry is one object</string>
-     </property>
-    </widget>
-   </item>
-   <item row="14" column="1">
+   <item row="15" column="1">
     <widget class="QDialogButtonBox" name="button_box">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -391,13 +401,10 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="Line" name="line_3">
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+   <item row="9" column="1">
+    <widget class="QRadioButton" name="radioButton_option_multigeom_3">
+     <property name="text">
+      <string>Whole layer as one object</string>
      </property>
     </widget>
    </item>
@@ -408,6 +415,11 @@
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsRasterBandComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsrasterbandcombobox.h</header>
   </customwidget>
  </customwidgets>
  <tabstops>
@@ -420,7 +432,6 @@
   <tabstop>lineEdit_val_slope</tabstop>
   <tabstop>lineEdit_val_aspect</tabstop>
   <tabstop>doubleSpinBox_sample</tabstop>
-  <tabstop>comboBox_band</tabstop>
   <tabstop>comboBox_algorytm</tabstop>
   <tabstop>spinBox_roundVal</tabstop>
  </tabstops>
@@ -434,11 +445,75 @@
    <hints>
     <hint type="sourcelabel">
      <x>221</x>
-     <y>425</y>
+     <y>539</y>
     </hint>
     <hint type="destinationlabel">
      <x>61</x>
      <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>mMapLayerComboBox_DEM</sender>
+   <signal>layerChanged(QgsMapLayer*)</signal>
+   <receiver>mRasterBandComboBox</receiver>
+   <slot>setLayer(QgsMapLayer*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>316</x>
+     <y>93</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>585</x>
+     <y>323</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox_val_hgt</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lineEdit_val_hgt</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>335</x>
+     <y>171</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>425</x>
+     <y>172</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox_val_slope</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lineEdit_val_slope</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>335</x>
+     <y>204</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>430</x>
+     <y>203</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox_val_aspect</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lineEdit_val_aspect</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>337</x>
+     <y>237</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>463</x>
+     <y>233</y>
     </hint>
    </hints>
   </connection>

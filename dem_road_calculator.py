@@ -82,9 +82,13 @@ class LineWrapper(): # wrapper for line geometry
         self.currentVector = None # current vector on which need to find new point
         self.currentPoint = None
 
-        self.nextPart()
+        # self.nextPart()
     
     def nextPointOnGeometryAt(self, meters):
+        if (not self.currentPoint):
+            self.nextPart()
+            return True
+        
         if (self.Multiline): # QgsMultiPolyLine
             newPoint = None
             toAdd = meters 
@@ -92,10 +96,11 @@ class LineWrapper(): # wrapper for line geometry
 
             while meters > 0:
                 if (flag):
-                    if (not self.nextPart()):
-                        return False
                     toAdd = meters
-                
+                    if (not self.nextPart()):
+                        self.currentPoint = self.LineGeometry[self.currentIndexPart][self.currentIndexPoint + 1]
+                        return False
+                    
                 meters = meters - self.currentVector.length()
                 flag = True
 
@@ -112,15 +117,16 @@ class LineWrapper(): # wrapper for line geometry
 
             while meters > 0:
                 if (flag):
-                    if (not self.nextPart()):
-                        return False
                     toAdd = meters
-                
+                    if (not self.nextPart()):
+                        self.currentPoint = self.LineGeometry[self.currentIndexPoint + 1]
+                        return False
+                    
                 meters = meters - self.currentVector.length()
                 flag = True
 
             newPoint = self.currentPoint + self.currentVector.normalized() * toAdd
-            self.currentVector = self.LineGeometry[self.currentIndexPoint + 1] - newPoint
+            self.currentVector = self.LineGeometry[self.currentIndexPoint + 1] - newPoint # new vector is next point of original geom - current calculated point
             self.currentPoint = newPoint
 
             return True
@@ -154,7 +160,8 @@ class LineWrapper(): # wrapper for line geometry
                 return False
 
 class VectorBuilder(QgsTask):
-    
+    printres = pyqtSignal(str)
+
     # TODO - class which creates vector objects in given layer
     # with given fields
     def __init__(self, description, layer, points_list):
@@ -192,15 +199,20 @@ class VectorBuilder(QgsTask):
         return True
     
     def finished(self, result): # завершение задачи
-        print('* [VectorBuilder] Task Finished with ' + str(result))
+        # now = datetime.datetime.now()
+        # print(now)
+        # print('*** [VectorBuilder] Task Finished with ' + str(result))
+        self.printres.emit('* [VectorBuilder] Task Finished with ' + str(result))
         self.result = result
     
     def cancel(self): # отмена задачи
         print('* [VectorBuilder] Task cancel')
+        self.printres.emit('* [VectorBuilder] Task cancel')
         super().cancel()
 
 class CalculateTask(QgsTask):
     initBuliderTask = pyqtSignal(list)
+    printres = pyqtSignal(str)
 
     # def __init__(self, description, features):
     def __init__(self, description, wrappedlines):
@@ -229,20 +241,29 @@ class CalculateTask(QgsTask):
             while(feature.nextPointOnGeometryAt(100)):
                 point_list.append(feature.getCurrentPoint())
             
+            point_list.append(feature.getCurrentPoint())
+            
             self.initBuliderTask.emit(point_list)
 
             # UPDATE PROGRESS
             current_progress += step
             self.setProgress(round(current_progress))
 
+        # now = datetime.datetime.now()
+        # print(now, '*** [CalculateTask] End task')
+
         return True
     
     def finished(self, result): # завершение задачи
+        # now = datetime.datetime.now()
+        # print(now)
         print('* [CalculateTask] Task Finished with ' + str(result))
+        self.printres.emit('* [CalculateTask] Task Ended with ' + str(result))
         self.result = result
        
     def cancel(self): # отмена задачи
         print('* [CalculateTask] Task cancel')
+        self.printres.emit('* [CalculateTask] Task cancel')
         super().cancel()
 
 
@@ -414,6 +435,8 @@ class DemRoadCalculator:
             self.dlg.pushButton_start.clicked.connect(self.runTask)
             #self.dlg.pushButton_stop.clicked.connect(self.stopTask)
 
+            self.dlg.pushButton_deb.clicked.connect(self.printDebug)
+
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
@@ -450,19 +473,23 @@ class DemRoadCalculator:
         self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list)
         self.task_manager.addTask(self.active_task)
         self.active_task.initBuliderTask.connect(self.runVectorEditTask)
+        self.active_task.printres.connect(self.printRes)
 
         self.printRes(" * start")
 
 
     def runVectorEditTask(self, array):
         task = VectorBuilder(TASK_DESCRIPTION,self.vl,array)
+        task.printres.connect(self.printRes)
         # self.active_task.addSubTask(task,[], QgsTask.ParentDependsOnSubTask)
         self.task_manager.addTask(task)
         # task.run()
 
 
     def allTasksFinished(self): # все активные задачи завершены
-        print("[Task Manager]: ALL TASKS FINISED")
+        # now = datetime.datetime.now()
+        # print(now, "[Task Manager]: ALL TASKS FINISED")
+        self.printRes(" * [Task Manager]: ALL TASKS FINISED")
         # for i, task in enumerate(self.task_manager.tasks()):
         #     self.dlg.textEdit_log.append("Task No " + str(i) + " Finished with " + str(task.result))
         #     del task
@@ -476,5 +503,16 @@ class DemRoadCalculator:
         # print(task_id, progress)
         self.dlg.progressBar.setValue(int(progress))
 
+    def printRes(self, string):
+        print('[',self.iterator,']' , string)
+        self.iterator += 1
 
+    def printDebug(self):
+        for i, task in enumerate(self.task_manager.tasks()):
+            self.printRes("Task No " + str(i) + " result is " + str(task.result))
+            self.printRes("Task No " + str(i) + "  isActive " + str(task.isActive()))
+            self.printRes("Task No " + str(i) + "  status " + str(task.status()))
+            print(task)
+            del task
+        pass
 
