@@ -70,19 +70,19 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # selected values to calculate
         if (self.checkBox_val_hgt.isChecked()):
-            if (not self.lineEdit_val_hgt.text().isEmpty):
+            if (self.lineEdit_val_hgt.text()):
                 hgt_field_name = self.lineEdit_val_hgt.text()
-                vector_fields['_hgt'] = hgt_field_name
+            vector_fields['_hgt'] = hgt_field_name
 
         if (self.checkBox_val_slope.isChecked()):
-            if (not self.lineEdit_val_slope.text().isEmpty):
+            if (self.lineEdit_val_slope.text()):
                 slope_field_name = self.lineEdit_val_slope.text()
-                vector_fields['_slope'] = slope_field_name
+            vector_fields['_slope'] = slope_field_name
 
         if (self.checkBox_val_aspect.isChecked()):
-            if (not self.lineEdit_val_aspect.text().isEmpty):
+            if (self.lineEdit_val_aspect.text()):
                 aspect_field_name = self.lineEdit_val_aspect.text()
-                vector_fields['_aspect'] = aspect_field_name
+            vector_fields['_aspect'] = aspect_field_name
 
         params.append(vector_fields)
 

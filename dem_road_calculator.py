@@ -40,6 +40,7 @@ from qgis.core import (
     QgsTask,
     QgsField,
     QgsCoordinateTransform,
+    QgsCoordinateTransformContext,
     QgsReferencedGeometryBase,
     QgsCoordinateReferenceSystem,
     QgsTaskManager,
@@ -61,12 +62,54 @@ VERSION = Qgis.QGIS_VERSION
 MESSAGE_CATEGORY = "RoadTask"
 TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
 
+class CalculationData(): # DataClass for calculation params
+    def __init__(self, rasterLayer, vectorLayer, bandNo, fields, step = 100, roundval = 2, algorytm = 0):
+        self.DemRasterLayer = rasterLayer
+        self.LineRoadsLayer = vectorLayer
+        self.RasterChannel = bandNo
+        self.VectorFields = fields # dict with _hgt, _slope, _aspect fields names
+        self.SampleStep = step
+        self.RoundValue = roundval
+        self.AlgoritmId = algorytm
+
+        ####
+        self.transformer = QgsCoordinateTransform(self.LineRoadsLayer.crs(), self.DemRasterLayer.crs(), QgsProject.instance())
+
+    def __str__(self):
+        str_r = "Calculation Parameters\n"
+        str_r += "Lines Layer: " + self.LineRoadsLayer.name() + "\n"
+        str_r += "DEM Layer: " + self.DemRasterLayer.name() + " Band:" + str(self.RasterChannel) + "\n"
+        str_r += "Sample Step: " + str(self.SampleStep) + " in " + str(self.DemRasterLayer.crs().mapUnits())  + "\n"
+        str_r += "Algorytm_id: " + str(self.AlgoritmId)
+        return str_r
+    
+    def checkCrs(self):
+        pass
+
+    def renderValuesAtPoint(self, point): # get values from DEM with given QgsPoint
+        result = dict()
+
+        transformedPoint = self.transformer.transform(point)
+        val, res = self.DemRasterLayer.dataProvider().sample(transformedPoint , self.RasterChannel)
+        # rendered value and bool flag of correct result
+
+        if (self.VectorFields['_hgt']):
+            result[self.VectorFields['_hgt']] = val if res else -999
+
+        if (self.VectorFields['_slope']):
+            pass
+
+        if (self.VectorFields['_aspect']):
+            pass
+        
+        return result
+        
 
 class LineWrapper(): # wrapper for line geometry
     def __init__(self, lineGeometry):
-        self.LineGeometry = None
-        self.Multiline = False
-        self.isValid = True
+        self.LineGeometry = None # reference to original QgsGeometry
+        self.Multiline = False # object is MultiPolyLine or not
+        self.isValid = True # object is valid
         try:
             self.LineGeometry = lineGeometry.asMultiPolyline()
         except TypeError:
@@ -80,11 +123,9 @@ class LineWrapper(): # wrapper for line geometry
         self.currentIndexPoint = -1 # current Id of original point of geometry
         self.currentIndexPart = 0 # current Id of part of MultiPolyLine
         self.currentVector = None # current vector on which need to find new point
-        self.currentPoint = None
-
-        # self.nextPart()
+        self.currentPoint = None # current point from which need to find new point on given currentvector
     
-    def nextPointOnGeometryAt(self, meters):
+    def nextPointOnGeometryAt(self, meters): # next point from current on line with given value of meters
         if (not self.currentPoint):
             self.nextPart()
             return True
@@ -105,7 +146,7 @@ class LineWrapper(): # wrapper for line geometry
                 flag = True
 
             newPoint = self.currentPoint + self.currentVector.normalized() * toAdd
-            self.currentVector = self.LineGeometry[self.currentIndexPart][self.currentIndexPoint + 1] - newPoint
+            self.currentVector = self.LineGeometry[self.currentIndexPart][self.currentIndexPoint + 1] - newPoint # new vector is next point of original geom - current calculated point
             self.currentPoint = newPoint
 
             return True
@@ -131,12 +172,17 @@ class LineWrapper(): # wrapper for line geometry
 
             return True
             
-    def getCurrentPoint(self):
+    def getCurrentPoint(self): # current calculated point
         return self.currentPoint 
+    
+    def getCurrentSegment(self): # current segment of two QgsPoint of original geometry
+        if (self.Multiline): # QgsMultiPolyLine
+            return self.LineGeometry[self.currentIndexPart][self.currentIndexPoint] , self.LineGeometry[self.currentIndexPart][self.currentIndexPoint + 1] 
+        else: # QgsPolyLine
+            return self.LineGeometry[self.currentIndexPoint] , self.LineGeometry[self.currentIndexPoint + 1] 
             
     def nextPart(self): # next part of line geometry
         if (self.Multiline): # QgsMultiPolyLine
-            
             if (self.currentIndexPoint + 2 < len(self.LineGeometry[self.currentIndexPart])): # if not the last pair of points in current polyline
                 self.currentIndexPoint += 1
             elif (self.currentIndexPart + 1 < len(self.LineGeometry)): # try to access next polyline
@@ -158,8 +204,15 @@ class LineWrapper(): # wrapper for line geometry
                 return True
             else:
                 return False
+    
+    def reset(self): # reset wrapper
+        self.currentIndexPoint = -1 # current Id of original point of geometry
+        self.currentIndexPart = 0 # current Id of part of MultiPolyLine
+        self.currentVector = None # current vector on which need to find new point
+        self.currentPoint = None # current point from which need to find new point on given currentvector
 
-class VectorBuilder(QgsTask):
+
+class VectorBuilder(QgsTask): # Task for building vector in given layer
     printres = pyqtSignal(str)
 
     # TODO - class which creates vector objects in given layer
@@ -171,15 +224,7 @@ class VectorBuilder(QgsTask):
 
         self.points = points_list
 
-        # now = datetime.datetime.now()
-        # print(now)
-        # print('*** [VectorBuilder] Init task')
-
     def run(self):
-        # now = datetime.datetime.now()
-        # print(now)
-        # print('*** [VectorBuilder] Start task')
-        
         features = []
         for point in self.points:
             feature = QgsFeature()
@@ -191,10 +236,6 @@ class VectorBuilder(QgsTask):
         self.vl.commitChanges()
 
         self.setProgress(100)
-
-        # now = datetime.datetime.now()
-        # print(now)
-        # print('*** [VectorBuilder] End task')
 
         return True
     
@@ -210,20 +251,17 @@ class VectorBuilder(QgsTask):
         self.printres.emit('* [VectorBuilder] Task cancel')
         super().cancel()
 
-class CalculateTask(QgsTask):
+class CalculateTask(QgsTask): # main calculation task
     initBuliderTask = pyqtSignal(list)
     printres = pyqtSignal(str)
 
     # def __init__(self, description, features):
-    def __init__(self, description, wrappedlines):
+    def __init__(self, description, wrappedlines, options):
         super().__init__(description, QgsTask.CanCancel)
         self.wrappedLinesList = wrappedlines
+        self.taskOptions = options
 
         self.result = None
-
-    # TODO - during run method get points from wrappers
-    # and define raster values in points
-    # then activate new VectorBuilder task for new points of each line object
 
     def run(self): # основная функция задачи  
         print('** Task run')
@@ -232,6 +270,9 @@ class CalculateTask(QgsTask):
         current_progress = 0.0
 
         for feature in self.wrappedLinesList:
+            if self.isCanceled():
+                return False
+            
             if (not feature.isValid):
                 self.printres.emit("* Not valid feature")
                 continue
@@ -239,8 +280,10 @@ class CalculateTask(QgsTask):
             point_list = []
 
             while(feature.nextPointOnGeometryAt(100)):
+                print(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
                 point_list.append(feature.getCurrentPoint())
             
+            print(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
             point_list.append(feature.getCurrentPoint())
             
             self.initBuliderTask.emit(point_list)
@@ -248,9 +291,6 @@ class CalculateTask(QgsTask):
             # UPDATE PROGRESS
             current_progress += step
             self.setProgress(round(current_progress))
-
-        # now = datetime.datetime.now()
-        # print(now, '*** [CalculateTask] End task')
 
         return True
     
@@ -458,8 +498,13 @@ class DemRoadCalculator:
         return lines_list
 
     def runTask(self):
+
         self.dlg.progressBar.setValue(0)
         self.dlg.setGUIEnabled(False)
+
+        options = self.dlg.getTaskOptions()
+        # print(options)
+        data = CalculationData(options[1],options[0],options[2],options[6],options[3],options[5],options[4])
 
         # create temporary layer
         self.vl = QgsVectorLayer("Point", "temporary_points", "memory")
@@ -470,7 +515,7 @@ class DemRoadCalculator:
         lines_list = self.WrapLines(self.dlg.mMapLayerComboBox_lines.currentLayer())
 
         # start new task
-        self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list)
+        self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list,data)
         self.task_manager.addTask(self.active_task)
         self.active_task.initBuliderTask.connect(self.runVectorEditTask)
         self.active_task.printres.connect(self.printRes)
