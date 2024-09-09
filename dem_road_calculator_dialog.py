@@ -84,7 +84,8 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
                 aspect_field_name = self.lineEdit_val_aspect.text()
             vector_fields['_aspect'] = aspect_field_name
 
-        params.append(vector_fields)
+        
+        params.append(dict(sorted(vector_fields.items())))
 
         return params
 

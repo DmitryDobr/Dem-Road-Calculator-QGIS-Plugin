@@ -38,7 +38,7 @@ def _WGHT(matrix: _3x3WindowMatrix):
             2*(matrix.z(6) != None if 1 else 0) + 
             (matrix.z(3) != None if 1 else 0))
 
-      wght3 = ((matrix(3) != None if 1 else 0) + 
+      wght3 = ((matrix.z(3) != None if 1 else 0) + 
             2*(matrix.z(2) != None if 1 else 0) + 
             (matrix.z(1) != None if 1 else 0))
 
@@ -48,7 +48,7 @@ def _WGHT(matrix: _3x3WindowMatrix):
 
 
       fx = ((matrix.z(7) + 2*matrix.z(4) + matrix.z(1)) * 4 / wght1
-      - (matrix.z(9) + 2*matrix(6) + matrix.z(3)) * 4 / wght2)
+      - (matrix.z(9) + 2*matrix.z(6) + matrix.z(3)) * 4 / wght2)
 
       fy = ((matrix.z(3) + 2*matrix.z(2) + matrix.z(1)) * 4 / wght3
       - (matrix.z(9) + 2*matrix.z(8) + matrix.z(7)) * 4 / wght4)
@@ -91,3 +91,6 @@ def _SimpleD(matrix: _3x3WindowMatrix, g):
      fy = (matrix.z(5) - matrix.z(2)) / g
 
      return (fx, fy)
+
+
+functionList = (_2FD, _3FDWRD, _3FD, _3FDWRSD, _FFD, _SimpleD, _WGHT)

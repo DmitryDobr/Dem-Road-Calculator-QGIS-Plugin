@@ -39,6 +39,7 @@ from qgis.core import (
     QgsPointXY, 
     QgsTask,
     QgsField,
+    QgsFields,
     QgsCoordinateTransform,
     QgsCoordinateTransformContext,
     QgsReferencedGeometryBase,
@@ -53,10 +54,8 @@ from .resources import *
 from .dem_road_calculator_dialog import DemRoadCalculatorDialog
 import os.path
 
-import datetime
-import time
-
-from .calculations import *
+import math
+from .calculations import functionList, _3x3WindowMatrix, _WGHT
 
 VERSION = Qgis.QGIS_VERSION
 MESSAGE_CATEGORY = "RoadTask"
@@ -75,6 +74,8 @@ class CalculationData(): # DataClass for calculation params
         ####
         self.transformer = QgsCoordinateTransform(self.LineRoadsLayer.crs(), self.DemRasterLayer.crs(), QgsProject.instance())
 
+        self.GradientsFunction = functionList[algorytm]
+
     def __str__(self):
         str_r = "Calculation Parameters\n"
         str_r += "Lines Layer: " + self.LineRoadsLayer.name() + "\n"
@@ -86,23 +87,57 @@ class CalculationData(): # DataClass for calculation params
     def checkCrs(self):
         pass
 
+    def getWindowMatrixAtPoint(self, point):
+        rasterX = self.DemRasterLayer.rasterUnitsPerPixelX()
+        rasterY = self.DemRasterLayer.rasterUnitsPerPixelY()
+
+        transformedPoint = self.transformer.transform(point)
+        
+        SlWindowMatrix = [[0] * 3 for _ in range(3)] # конструкция матрицы
+        # заполнение матрицы скользящего окна
+        for y in range(-1,2):
+            for x in range(-1,2):
+                buf_point = QgsPointXY(transformedPoint) # буферная точка
+                buf_point += QgsVector(rasterX*x, -rasterY*y) # смещение точки для заполнения матрицы
+                val, res = self.DemRasterLayer.dataProvider().sample(buf_point , self.RasterChannel)
+
+                SlWindowMatrix[y+1][x+1] = val if res else None
+        
+        return SlWindowMatrix
+
     def renderValuesAtPoint(self, point): # get values from DEM with given QgsPoint
         result = dict()
 
+        # matrix = _3x3WindowMatrix()
+
         transformedPoint = self.transformer.transform(point)
         val, res = self.DemRasterLayer.dataProvider().sample(transformedPoint , self.RasterChannel)
+        
+        matrix = self.getWindowMatrixAtPoint(point)
+        # print(matrix[0])
+        # print(matrix[1])
+        # print(matrix[2])
+
+        matrix = _3x3WindowMatrix(matrix)
+
         # rendered value and bool flag of correct result
 
-        if (self.VectorFields['_hgt']):
+        if (self.VectorFields.get('_hgt')):
             result[self.VectorFields['_hgt']] = val if res else -999
 
-        if (self.VectorFields['_slope']):
-            pass
+        if (self.VectorFields.get('_slope')):
+            fx, fy = self.GradientsFunction(matrix, self.DemRasterLayer.rasterUnitsPerPixelX())
+            SlopeVal = math.atan(math.sqrt(pow(fx,2) + pow(fy,2))) * 57.29578
+            result[self.VectorFields['_slope']] = SlopeVal
 
-        if (self.VectorFields['_aspect']):
-            pass
+        if (self.VectorFields.get('_aspect')):
+            fx, fy = _WGHT(matrix)
+            AspectVal = (180/math.pi) * math.atan2(fy, -fx)
+            result[self.VectorFields['_aspect']] = AspectVal
+
+        print(result)
         
-        return result
+        return dict(sorted(result.items()))
         
 
 class LineWrapper(): # wrapper for line geometry
@@ -217,23 +252,38 @@ class VectorBuilder(QgsTask): # Task for building vector in given layer
 
     # TODO - class which creates vector objects in given layer
     # with given fields
-    def __init__(self, description, layer, points_list):
+    def __init__(self, description, layer, points_list, args_dict):
         super().__init__(description, QgsTask.CanCancel)
         self.vl = layer
         self.pr = self.vl.dataProvider()
 
         self.points = points_list
+        self.args = args_dict
+
+        self.fids = QgsFields()
+        for key, _ in self.args[0].items():
+                self.fids.append(QgsField(key, QVariant.Double))
 
     def run(self):
         features = []
-        for point in self.points:
+
+        for i in range(0, len(self.points)):
             feature = QgsFeature()
-            feature.setGeometry( QgsGeometry.fromPointXY(point) )
+            feature.setGeometry( QgsGeometry.fromPointXY(self.points[i]) )
+
+            feature.setFields(self.fids)
+
+            for key, value in self.args[i].items():
+                feature.setAttribute(key, value)
+
             features.append(feature)
+            print(self.args[i])
+
 
         self.vl.startEditing()
         self.pr.addFeatures(features)
         self.vl.commitChanges()
+
 
         self.setProgress(100)
 
@@ -252,7 +302,7 @@ class VectorBuilder(QgsTask): # Task for building vector in given layer
         super().cancel()
 
 class CalculateTask(QgsTask): # main calculation task
-    initBuliderTask = pyqtSignal(list)
+    initBuliderTask = pyqtSignal(list , list)
     printres = pyqtSignal(str)
 
     # def __init__(self, description, features):
@@ -278,15 +328,18 @@ class CalculateTask(QgsTask): # main calculation task
                 continue
             
             point_list = []
+            arg_list = []
 
             while(feature.nextPointOnGeometryAt(100)):
-                print(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
+                # print(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
                 point_list.append(feature.getCurrentPoint())
+                arg_list.append(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
             
-            print(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
+            # print(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
             point_list.append(feature.getCurrentPoint())
+            arg_list.append(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
             
-            self.initBuliderTask.emit(point_list)
+            self.initBuliderTask.emit(point_list, arg_list)
 
             # UPDATE PROGRESS
             current_progress += step
@@ -498,24 +551,32 @@ class DemRoadCalculator:
         return lines_list
 
     def runTask(self):
-
         self.dlg.progressBar.setValue(0)
         self.dlg.setGUIEnabled(False)
 
         options = self.dlg.getTaskOptions()
-        # print(options)
         data = CalculationData(options[1],options[0],options[2],options[6],options[3],options[5],options[4])
 
-        # create temporary layer
-        self.vl = QgsVectorLayer("Point", "temporary_points", "memory")
-        self.vl.setCrs(self.dlg.mMapLayerComboBox_lines.currentLayer().crs())
-        QgsProject.instance().addMapLayer(self.vl)
+        
+        self.vectorLayer = QgsVectorLayer("Point", "temporary_points", "memory") # create temporary layer
+        self.vectorLayer.setCrs(self.dlg.mMapLayerComboBox_lines.currentLayer().crs())
+        
+        print(options[6])
 
-        # Wrap Line geometry
-        lines_list = self.WrapLines(self.dlg.mMapLayerComboBox_lines.currentLayer())
 
-        # start new task
-        self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list,data)
+        for value in list(sorted(options[6].values())):
+            self.vectorLayer.dataProvider().addAttributes( [QgsField(value,  QVariant.Double) ] )
+        
+            
+        self.vectorLayer.updateFields()
+
+        QgsProject.instance().addMapLayer(self.vectorLayer)
+
+        
+        lines_list = self.WrapLines(self.dlg.mMapLayerComboBox_lines.currentLayer()) # Wrap Line geometry
+
+        
+        self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list,data) # start new task
         self.task_manager.addTask(self.active_task)
         self.active_task.initBuliderTask.connect(self.runVectorEditTask)
         self.active_task.printres.connect(self.printRes)
@@ -523,8 +584,8 @@ class DemRoadCalculator:
         self.printRes(" * start")
 
 
-    def runVectorEditTask(self, array):
-        task = VectorBuilder(TASK_DESCRIPTION,self.vl,array)
+    def runVectorEditTask(self, array, array_args):
+        task = VectorBuilder(TASK_DESCRIPTION,self.vectorLayer,array, array_args)
         task.printres.connect(self.printRes)
         # self.active_task.addSubTask(task,[], QgsTask.ParentDependsOnSubTask)
         self.task_manager.addTask(task)
