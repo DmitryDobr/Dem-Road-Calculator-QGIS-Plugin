@@ -161,7 +161,6 @@ class LineWrapper(): # wrapper for line geometry
         self.currentPoint = None # current point from which need to find new point on given currentvector
 
         self.currentsegment = list()
-        # self.currentLineSegment = QgsGeometry()
     
     def nextPointOnGeometryAt(self, meters): # next point from current on line with given value of meters
         if (not self.currentPoint):
@@ -223,8 +222,10 @@ class LineWrapper(): # wrapper for line geometry
         return self.currentPoint 
     
     def getCurrentSegment(self): # current found segment 
-        currentLineSegment = QgsGeometry.fromPolylineXY(self.currentsegment)
-        return currentLineSegment
+        # currentLineSegment = QgsGeometry.fromPolylineXY(self.currentsegment)
+        # return currentLineSegment
+        segment = self.currentsegment.copy()
+        return segment
             
     def nextPart(self): # next part of line geometry
         if (self.Multiline): # QgsMultiPolyLine
@@ -257,15 +258,12 @@ class LineWrapper(): # wrapper for line geometry
         self.currentPoint = None # current point from which need to find new point on given currentvector
 
 
-class VectorBuilder(QgsTask): # Task for building vector in given layer
+class VectorBuilder(QgsTask): # Task for building points in given layer
     printres = pyqtSignal(str)
 
-    # TODO - class which creates vector objects in given layer
-    # with given fields
-    def __init__(self, description, pointLayer, lineLayer, points_list, args_dict):
+    def __init__(self, description, pointLayer, points_list, args_dict):
         super().__init__(description, QgsTask.CanCancel)
         self.pointVl = pointLayer
-        self.lineVl = lineLayer
 
         self.pointsToAdd = points_list
         self.argsToAdd = args_dict
@@ -302,10 +300,56 @@ class VectorBuilder(QgsTask): # Task for building vector in given layer
         self.printres.emit('* [VectorBuilder] Task cancel')
         super().cancel()
 
+class VectorBuilderV2(QgsTask): # Task for building lines in given layer
+    printres = pyqtSignal(str)
+
+    def __init__(self, description, lineLayer, lines_list, args_dict):
+        super().__init__(description, QgsTask.CanCancel)
+        self.lineVl = lineLayer
+
+        self.linestoAdd = lines_list # list[ list[QgsPointXY,QgsPointXY,...], list[...] , ... ]
+        self.argsToAdd = args_dict
+
+    def run(self):
+        lineFeatures = []
+
+        for i in range(1, len(self.linestoAdd)):
+
+            lineFeature = QgsFeature()
+            lineFeature.setGeometry(QgsGeometry.fromPolylineXY(self.linestoAdd[i])) # list[QgsPointXY,QgsPointXY,...]
+            lineFeature.setFields(self.lineVl.dataProvider().fields())
+            
+            # start point DEM values
+            for key, value in self.argsToAdd[i-1].items():
+                cur_key = key + "_start"
+                lineFeature.setAttribute(cur_key, value)
+            # end point DEM values
+            for key, value in self.argsToAdd[i].items():
+                cur_key = key + "_end"
+                lineFeature.setAttribute(cur_key, value)
+
+            lineFeatures.append(lineFeature)
+
+        self.lineVl.startEditing()
+        self.lineVl.dataProvider().addFeatures(lineFeatures)
+        self.lineVl.commitChanges()
+ 
+        self.setProgress(100)
+
+        return True
+    
+    def finished(self, result):
+        self.printres.emit('* [VectorBuilderV2] Task Finished with ' + str(result))
+        self.result = result
+    
+    def cancel(self):
+        print('* [VectorBuilder] Task cancel')
+        self.printres.emit('* [VectorBuilder] Task cancel')
+        super().cancel()
 
 class CalculateTask(QgsTask): # main calculation task
     initBuliderTask = pyqtSignal(list , list) # points + values
-    initBuliderTask2 = pyqtSignal(list , list) # lines + values
+    initBuliderTaskV2 = pyqtSignal(list , list) # lines + values
     printres = pyqtSignal(str)
 
     def __init__(self, description, wrappedlines, options):
@@ -337,15 +381,15 @@ class CalculateTask(QgsTask): # main calculation task
                 point_list.append(feature.getCurrentPoint())
                 arg_list.append(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
                 line_list.append(feature.getCurrentSegment())
-                print(feature.getCurrentSegment())
             
             point_list.append(feature.getCurrentPoint())
             arg_list.append(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
-            print(feature.getCurrentSegment())
+            line_list.append(feature.getCurrentSegment())
 
             
             self.initBuliderTask.emit(point_list, arg_list)
             # list of separate QgsPoints with step, list of DEM values
+            self.initBuliderTaskV2.emit(line_list, arg_list)
 
             # UPDATE PROGRESS
             current_progress += step
@@ -590,20 +634,31 @@ class DemRoadCalculator:
         
         self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list,data) # start new task
         self.task_manager.addTask(self.active_task)
+
         self.active_task.initBuliderTask.connect(self.runVectorEditTask)
+        self.active_task.initBuliderTaskV2.connect(self.runVectorEditTaskV2)
+
         self.active_task.printres.connect(self.printRes)
 
         self.printRes(" * start")
 
 
     def runVectorEditTask(self, array, array_args):
-        task = VectorBuilder(TASK_DESCRIPTION, pointLayer=self.vectorLayer, lineLayer=self.linesLayer,
+        task = VectorBuilder(TASK_DESCRIPTION, pointLayer=self.vectorLayer,
                                 points_list=array, args_dict=array_args) 
         # pointLayer to create, point list with point coords, calculated values for points
         task.printres.connect(self.printRes)
-        # self.active_task.addSubTask(task,[], QgsTask.ParentDependsOnSubTask)
         self.task_manager.addTask(task)
-        # task.run()
+
+    def runVectorEditTaskV2(self, array_lines, array_args):
+
+        task = VectorBuilderV2(TASK_DESCRIPTION, lineLayer=self.linesLayer,
+                                lines_list=array_lines, args_dict=array_args) 
+        # lineLayer to create, lines list with point coords, calculated values for points
+        task.printres.connect(self.printRes)
+        self.task_manager.addTask(task)
+
+
 
 
     def allTasksFinished(self): # все активные задачи завершены
