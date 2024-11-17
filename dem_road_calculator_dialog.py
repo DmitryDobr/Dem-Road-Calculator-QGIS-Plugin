@@ -84,15 +84,9 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
                 aspect_field_name = self.lineEdit_val_aspect.text()
             vector_fields['_aspect'] = aspect_field_name
 
-        
         params.append(dict(sorted(vector_fields.items())))
 
         return params
-
-        
-
     
     def setGUIEnabled(self, flag):
-        # self.tabWidget.widget(0).setEnabled(flag)
         self.pushButton_start.setEnabled(flag)
-        pass

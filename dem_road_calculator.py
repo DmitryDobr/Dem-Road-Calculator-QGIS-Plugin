@@ -67,6 +67,10 @@ class CalculationData(): # DataClass for calculation params
         self.LineRoadsLayer = vectorLayer
         self.RasterChannel = bandNo
         self.VectorFields = fields # dict with _hgt, _slope, _aspect fields names
+        # e.g.
+        # ('_aspect' : '123')
+        # ('_hgt' : '123')
+        # ('_slope' : '123')
         self.SampleStep = step
         self.RoundValue = roundval
         self.AlgoritmId = algorytm
@@ -88,13 +92,13 @@ class CalculationData(): # DataClass for calculation params
         pass
 
     def getWindowMatrixAtPoint(self, point):
+        # point from line layer crs in DEM layer src
         rasterX = self.DemRasterLayer.rasterUnitsPerPixelX()
         rasterY = self.DemRasterLayer.rasterUnitsPerPixelY()
 
-        transformedPoint = self.transformer.transform(point)
+        transformedPoint = self.transformer.transform(point) # slight window matrix 
         
-        SlWindowMatrix = [[0] * 3 for _ in range(3)] # конструкция матрицы
-        # заполнение матрицы скользящего окна
+        SlWindowMatrix = [[0] * 3 for _ in range(3)] 
         for y in range(-1,2):
             for x in range(-1,2):
                 buf_point = QgsPointXY(transformedPoint) # буферная точка
@@ -108,16 +112,10 @@ class CalculationData(): # DataClass for calculation params
     def renderValuesAtPoint(self, point): # get values from DEM with given QgsPoint
         result = dict()
 
-        # matrix = _3x3WindowMatrix()
-
         transformedPoint = self.transformer.transform(point)
         val, res = self.DemRasterLayer.dataProvider().sample(transformedPoint , self.RasterChannel)
         
-        matrix = self.getWindowMatrixAtPoint(point)
-        # print(matrix[0])
-        # print(matrix[1])
-        # print(matrix[2])
-
+        matrix = self.getWindowMatrixAtPoint(point) # matrix with raster values
         matrix = _3x3WindowMatrix(matrix)
 
         # rendered value and bool flag of correct result
@@ -134,11 +132,12 @@ class CalculationData(): # DataClass for calculation params
             fx, fy = _WGHT(matrix)
             AspectVal = (180/math.pi) * math.atan2(fy, -fx)
             result[self.VectorFields['_aspect']] = AspectVal
-
-        # print(result)
         
         return dict(sorted(result.items()))
         
+    def checkData(self):
+
+        return True
 
 class LineWrapper(): # wrapper for line geometry
     def __init__(self, lineGeometry):
@@ -258,7 +257,7 @@ class LineWrapper(): # wrapper for line geometry
         self.currentPoint = None # current point from which need to find new point on given currentvector
 
 
-class VectorBuilder(QgsTask): # Task for building points in given layer
+class VectorBuilderV1(QgsTask): # Task for building points in given layer
     printres = pyqtSignal(str)
 
     def __init__(self, description, pointLayer, points_list, args_dict):
@@ -348,7 +347,7 @@ class VectorBuilderV2(QgsTask): # Task for building lines in given layer
         super().cancel()
 
 class CalculateTask(QgsTask): # main calculation task
-    initBuliderTask = pyqtSignal(list , list) # points + values
+    initBuliderTaskV1 = pyqtSignal(list , list) # points + values
     initBuliderTaskV2 = pyqtSignal(list , list) # lines + values
     printres = pyqtSignal(str)
 
@@ -387,9 +386,10 @@ class CalculateTask(QgsTask): # main calculation task
             line_list.append(feature.getCurrentSegment())
 
             
-            self.initBuliderTask.emit(point_list, arg_list)
+            self.initBuliderTaskV1.emit(point_list, arg_list)
             # list of separate QgsPoints with step, list of DEM values
             self.initBuliderTaskV2.emit(line_list, arg_list)
+            # list of QgsPoints for lines, list of DEM values
 
             # UPDATE PROGRESS
             current_progress += step
@@ -397,9 +397,7 @@ class CalculateTask(QgsTask): # main calculation task
 
         return True
     
-    def finished(self, result): # завершение задачи
-        # now = datetime.datetime.now()
-        # print(now)
+    def finished(self, result):
         print('* [CalculateTask] Task Finished with ' + str(result))
         self.printres.emit('* [CalculateTask] Task Ended with ' + str(result))
         self.result = result
@@ -607,19 +605,19 @@ class DemRoadCalculator:
         options = self.dlg.getTaskOptions()
         data = CalculationData(options[1],options[0],options[2],options[6],options[3],options[5],options[4])
 
-        
+        if not data.checkData():
+            return
+
         self.vectorLayer = QgsVectorLayer("Point", "temporary_points", "memory") # create temporary layer
         self.vectorLayer.setCrs(self.dlg.mMapLayerComboBox_lines.currentLayer().crs())
 
-        self.linesLayer = QgsVectorLayer("LineString", "lines", "memory") # create temporary layer
+        self.linesLayer = QgsVectorLayer("LineString", "temporary_lines", "memory") # create temporary layer
         self.linesLayer.setCrs(self.dlg.mMapLayerComboBox_lines.currentLayer().crs())
-        
-        print(options[6])
 
         for value in list(sorted(options[6].values())):
-            self.vectorLayer.dataProvider().addAttributes( [QgsField(value,  QVariant.Double) ] )
+            self.vectorLayer.dataProvider().addAttributes( [QgsField(value,  QVariant.Double) ] ) # add attributes to point layer
 
-            self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_start",  QVariant.Double) ] )
+            self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_start",  QVariant.Double) ] )  # add attributes to line layer
             self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_end",  QVariant.Double) ] )
         
         self.vectorLayer.updateFields()
@@ -635,7 +633,7 @@ class DemRoadCalculator:
         self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list,data) # start new task
         self.task_manager.addTask(self.active_task)
 
-        self.active_task.initBuliderTask.connect(self.runVectorEditTask)
+        self.active_task.initBuliderTaskV1.connect(self.runVectorEditTaskV1)
         self.active_task.initBuliderTaskV2.connect(self.runVectorEditTaskV2)
 
         self.active_task.printres.connect(self.printRes)
@@ -643,15 +641,14 @@ class DemRoadCalculator:
         self.printRes(" * start")
 
 
-    def runVectorEditTask(self, array, array_args):
-        task = VectorBuilder(TASK_DESCRIPTION, pointLayer=self.vectorLayer,
+    def runVectorEditTaskV1(self, array, array_args):
+        task = VectorBuilderV1(TASK_DESCRIPTION, pointLayer=self.vectorLayer,
                                 points_list=array, args_dict=array_args) 
         # pointLayer to create, point list with point coords, calculated values for points
         task.printres.connect(self.printRes)
         self.task_manager.addTask(task)
 
     def runVectorEditTaskV2(self, array_lines, array_args):
-
         task = VectorBuilderV2(TASK_DESCRIPTION, lineLayer=self.linesLayer,
                                 lines_list=array_lines, args_dict=array_args) 
         # lineLayer to create, lines list with point coords, calculated values for points
@@ -659,20 +656,11 @@ class DemRoadCalculator:
         self.task_manager.addTask(task)
 
 
-
-
-    def allTasksFinished(self): # все активные задачи завершены
-        # now = datetime.datetime.now()
-        # print(now, "[Task Manager]: ALL TASKS FINISED")
+    def allTasksFinished(self):
         self.printRes(" * [Task Manager]: ALL TASKS FINISED")
-        # for i, task in enumerate(self.task_manager.tasks()):
-        #     self.dlg.textEdit_log.append("Task No " + str(i) + " Finished with " + str(task.result))
-        #     del task
         
         self.dlg.setGUIEnabled(True)
         
-        # print(len(self.task_manager.tasks()))
-        # print(self.task_manager.count())
     
     def taskProgresChanged(self, task_id, progress): # прогресс в задаче обновлен
         # print(task_id, progress)
