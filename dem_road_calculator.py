@@ -126,18 +126,35 @@ class CalculationData(): # DataClass for calculation params
         if (self.VectorFields.get('_slope')):
             fx, fy = self.GradientsFunction(matrix, self.DemRasterLayer.rasterUnitsPerPixelX())
             SlopeVal = math.atan(math.sqrt(pow(fx,2) + pow(fy,2))) * 57.29578
-            result[self.VectorFields['_slope']] = SlopeVal
+            result[self.VectorFields['_slope']] = round(SlopeVal, self.RoundValue)
 
         if (self.VectorFields.get('_aspect')):
             fx, fy = _WGHT(matrix)
             AspectVal = (180/math.pi) * math.atan2(fy, -fx)
-            result[self.VectorFields['_aspect']] = AspectVal
+
+            if AspectVal < 0:
+                AspectVal = 90.0 - AspectVal
+            elif AspectVal > 90.0:
+                AspectVal = 360.0 - AspectVal + 90.0
+            else:
+                AspectVal = 90.0 - AspectVal
+
+
+            result[self.VectorFields['_aspect']] = round(AspectVal, self.RoundValue)
         
         return dict(sorted(result.items()))
         
     def checkData(self):
+        flag = True
+        if (self.LineRoadsLayer.featureCount() < 0):
+            print("* [Input Data Error]: line features count = 0")
+            flag = False
+        
+        if (self.DemRasterLayer.crs().mapUnits() != Qgis.DistanceUnit.Meters):
+            print("* [Input Data Error]: Dem Raster CRS must be in meters")
+            flag = False
 
-        return True
+        return flag
 
 class LineWrapper(): # wrapper for line geometry
     def __init__(self, lineGeometry):
@@ -576,8 +593,6 @@ class DemRoadCalculator:
             self.dlg.pushButton_start.clicked.connect(self.runTask)
             #self.dlg.pushButton_stop.clicked.connect(self.stopTask)
 
-            self.dlg.pushButton_deb.clicked.connect(self.printDebug)
-
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
@@ -658,8 +673,8 @@ class DemRoadCalculator:
 
     def allTasksFinished(self):
         self.printRes(" * [Task Manager]: ALL TASKS FINISED")
-        
         self.dlg.setGUIEnabled(True)
+        self.iface.messageBar().pushMessage("Task finished", "Output layers generated", level=Qgis.Success, duration=10)
         
     
     def taskProgresChanged(self, task_id, progress): # прогресс в задаче обновлен
