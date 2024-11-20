@@ -23,8 +23,8 @@ class _3x3WindowMatrix():
             for _ in range(i-1,0,-1):
                 col -= 1
                 if (col < 0):
-                    row -= 1
-                    col = 2
+                  row -= 1
+                  col = 2
             return self.matrix[row][col]
 
 

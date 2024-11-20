@@ -6,115 +6,49 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>635</width>
-    <height>608</height>
+    <width>633</width>
+    <height>719</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dem Road Calculator</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">
-   <item row="1" column="1">
-    <layout class="QGridLayout" name="gridLayout">
-     <item row="0" column="0">
-      <widget class="QLabel" name="label">
-       <property name="text">
-        <string>1. road lines vector layer</string>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>2. DEM raster layer</string>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="1">
-      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_DEM"/>
-     </item>
-     <item row="0" column="1">
-      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_lines"/>
-     </item>
-    </layout>
+   <item row="12" column="2">
+    <widget class="QPushButton" name="pushButton_cancel">
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
    </item>
-   <item row="7" column="1">
-    <layout class="QHBoxLayout" name="horizontalLayout_2">
-     <property name="leftMargin">
-      <number>5</number>
+   <item row="12" column="1">
+    <widget class="QPushButton" name="pushButton_start">
+     <property name="text">
+      <string>Run</string>
      </property>
-     <property name="topMargin">
-      <number>5</number>
-     </property>
-     <property name="rightMargin">
-      <number>5</number>
-     </property>
-     <property name="bottomMargin">
-      <number>5</number>
-     </property>
-     <item>
-      <widget class="QLabel" name="label_13">
-       <property name="text">
-        <string>Calculation step (m)</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QDoubleSpinBox" name="doubleSpinBox_sample">
-       <property name="minimum">
-        <double>1.000000000000000</double>
-       </property>
-       <property name="maximum">
-        <double>1000.000000000000000</double>
-       </property>
-       <property name="value">
-        <double>100.000000000000000</double>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QLabel" name="label_14">
-       <property name="text">
-        <string>Raster band no.</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QgsRasterBandComboBox" name="mRasterBandComboBox"/>
-     </item>
-    </layout>
+    </widget>
    </item>
-   <item row="6" column="1">
-    <widget class="Line" name="line_2">
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
-     </property>
+   <item row="12" column="0">
+    <spacer name="horizontalSpacer_4">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-    </widget>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>40</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
    </item>
-   <item row="11" column="1">
-    <widget class="QProgressBar" name="progressBar">
-     <property name="value">
-      <number>0</number>
+   <item row="9" column="0" colspan="3">
+    <widget class="QTextEdit" name="textEdit_log">
+     <property name="readOnly">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
-   <item row="8" column="1">
+   <item row="8" column="0" colspan="3">
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <property name="leftMargin">
       <number>5</number>
@@ -207,54 +141,69 @@
      </item>
     </layout>
    </item>
-   <item row="10" column="1">
-    <widget class="QPushButton" name="pushButton_start">
-     <property name="text">
-      <string>Run</string>
+   <item row="7" column="0" colspan="3">
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <property name="leftMargin">
+      <number>5</number>
      </property>
-    </widget>
+     <property name="topMargin">
+      <number>5</number>
+     </property>
+     <property name="rightMargin">
+      <number>5</number>
+     </property>
+     <property name="bottomMargin">
+      <number>5</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="label_13">
+       <property name="text">
+        <string>Calculation step (m)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDoubleSpinBox" name="doubleSpinBox_sample">
+       <property name="minimum">
+        <double>1.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>100.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_14">
+       <property name="text">
+        <string>Raster band no.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QgsRasterBandComboBox" name="mRasterBandComboBox"/>
+     </item>
+    </layout>
    </item>
-   <item row="4" column="1">
-    <widget class="QLabel" name="label_4">
-     <property name="text">
-      <string>Settings</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="1">
-    <widget class="Line" name="line_3">
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-   </item>
-   <item row="9" column="1">
-    <spacer name="verticalSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>73</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item row="0" column="1">
-    <widget class="QLabel" name="label_3">
-     <property name="text">
-      <string>Input Layers</string>
-     </property>
-    </widget>
-   </item>
-   <item row="5" column="1">
+   <item row="5" column="0" colspan="3">
     <layout class="QGridLayout" name="gridLayout_2">
-     <item row="1" column="2">
-      <widget class="QCheckBox" name="checkBox_val_hgt">
+     <item row="3" column="2">
+      <widget class="QCheckBox" name="checkBox_val_aspect">
        <property name="text">
         <string/>
        </property>
@@ -263,10 +212,20 @@
        </property>
       </widget>
      </item>
-     <item row="2" column="0">
-      <widget class="QLabel" name="label_6">
+     <item row="0" column="0">
+      <widget class="QLabel" name="label_8">
        <property name="text">
-        <string>2. Slope</string>
+        <string>Value</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="3">
+      <widget class="QLineEdit" name="lineEdit_val_slope">
+       <property name="placeholderText">
+        <string>layer name e.g. _slope</string>
        </property>
       </widget>
      </item>
@@ -277,15 +236,18 @@
        </property>
       </widget>
      </item>
-     <item row="3" column="0">
-      <widget class="QLabel" name="label_7">
+     <item row="0" column="3">
+      <widget class="QLabel" name="label_10">
        <property name="text">
-        <string>3. Aspect</string>
+        <string>Layer name</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>
-     <item row="3" column="2">
-      <widget class="QCheckBox" name="checkBox_val_aspect">
+     <item row="1" column="2">
+      <widget class="QCheckBox" name="checkBox_val_hgt">
        <property name="text">
         <string/>
        </property>
@@ -304,10 +266,38 @@
        </property>
       </widget>
      </item>
-     <item row="2" column="3">
-      <widget class="QLineEdit" name="lineEdit_val_slope">
+     <item row="1" column="3">
+      <widget class="QLineEdit" name="lineEdit_val_hgt">
        <property name="placeholderText">
-        <string>layer name e.g. _slope</string>
+        <string>layer name e.g. _hgt</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="label_6">
+       <property name="text">
+        <string>2. Slope</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="label_7">
+       <property name="text">
+        <string>3. Aspect</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="3">
+      <widget class="QLineEdit" name="lineEdit_val_aspect">
+       <property name="placeholderText">
+        <string>layer name e.g. _aspect</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="label_9">
+       <property name="text">
+        <string>Calculate</string>
        </property>
       </widget>
      </item>
@@ -324,48 +314,85 @@
        </property>
       </spacer>
      </item>
-     <item row="3" column="3">
-      <widget class="QLineEdit" name="lineEdit_val_aspect">
-       <property name="placeholderText">
-        <string>layer name e.g. _aspect</string>
-       </property>
-      </widget>
-     </item>
+    </layout>
+   </item>
+   <item row="4" column="0" colspan="3">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>Settings</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0" colspan="3">
+    <layout class="QGridLayout" name="gridLayout">
      <item row="0" column="0">
-      <widget class="QLabel" name="label_8">
+      <widget class="QLabel" name="label">
        <property name="text">
-        <string>Value</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
+        <string>1. road lines vector layer</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="3">
-      <widget class="QLineEdit" name="lineEdit_val_hgt">
-       <property name="placeholderText">
-        <string>layer name e.g. _hgt</string>
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>2. DEM raster layer</string>
        </property>
       </widget>
      </item>
-     <item row="0" column="2">
-      <widget class="QLabel" name="label_9">
-       <property name="text">
-        <string>Calculate</string>
-       </property>
-      </widget>
+     <item row="1" column="1">
+      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_DEM"/>
      </item>
-     <item row="0" column="3">
-      <widget class="QLabel" name="label_10">
-       <property name="text">
-        <string>Layer name</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
-       </property>
-      </widget>
+     <item row="0" column="1">
+      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_lines"/>
      </item>
     </layout>
+   </item>
+   <item row="0" column="0" colspan="3">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Input Layers</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0" colspan="3">
+    <widget class="Line" name="line_3">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="13" column="0" colspan="3">
+    <widget class="QProgressBar" name="progressBar">
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
+   </item>
+   <item row="10" column="0" colspan="3">
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>73</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item row="6" column="0" colspan="3">
+    <widget class="Line" name="line_2">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

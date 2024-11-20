@@ -45,7 +45,9 @@ from qgis.core import (
     QgsReferencedGeometryBase,
     QgsCoordinateReferenceSystem,
     QgsTaskManager,
-    edit
+    edit,
+    QgsRectangle,
+    QgsRaster
 )
 
 # Initialize Qt resources from file resources.py
@@ -57,8 +59,7 @@ import os.path
 import math
 from .calculations import functionList, _3x3WindowMatrix, _WGHT
 
-VERSION = Qgis.QGIS_VERSION
-MESSAGE_CATEGORY = "RoadTask"
+VERSION = Qgis.QGIS_VERSION_INT
 TASK_DESCRIPTION = "ROAD_DEM_CALCULATION"
 
 class CalculationData(): # DataClass for calculation params
@@ -76,9 +77,31 @@ class CalculationData(): # DataClass for calculation params
         self.AlgoritmId = algorytm
 
         ####
-        self.transformer = QgsCoordinateTransform(self.LineRoadsLayer.crs(), self.DemRasterLayer.crs(), QgsProject.instance())
+        self.transformer = None
+        if (self.LineRoadsLayer and self.DemRasterLayer):
+            self.transformer = QgsCoordinateTransform(self.LineRoadsLayer.crs(), self.DemRasterLayer.crs(), QgsProject.instance())
 
         self.GradientsFunction = functionList[algorytm]
+
+    def __init__(self, params):
+        self.DemRasterLayer = params['DEMLayer']
+        self.LineRoadsLayer = params['linesLayer']
+        self.RasterChannel = params['BandNo']
+        self.VectorFields = params['CalcFields'] # dict with _hgt, _slope, _aspect fields names
+        # e.g.
+        # ('_aspect' : '123')
+        # ('_hgt' : '123')
+        # ('_slope' : '123')
+        self.SampleStep = params['SampleStep']
+        self.RoundValue = params['RoundVal']
+        self.AlgoritmId = params['AlgorytmId']
+
+        ####
+        self.transformer = None
+        if (self.LineRoadsLayer and self.DemRasterLayer):
+            self.transformer = QgsCoordinateTransform(self.LineRoadsLayer.crs(), self.DemRasterLayer.crs(), QgsProject.instance())
+
+        self.GradientsFunction = functionList[self.AlgoritmId]
 
     def __str__(self):
         str_r = "Calculation Parameters\n"
@@ -101,19 +124,30 @@ class CalculationData(): # DataClass for calculation params
         SlWindowMatrix = [[0] * 3 for _ in range(3)] 
         for y in range(-1,2):
             for x in range(-1,2):
-                buf_point = QgsPointXY(transformedPoint) # буферная точка
-                buf_point += QgsVector(rasterX*x, -rasterY*y) # смещение точки для заполнения матрицы
-                val, res = self.DemRasterLayer.dataProvider().sample(buf_point , self.RasterChannel)
+                buf_point = QgsPointXY(transformedPoint) # buffer point copy from transformed
+                buf_point += QgsVector(rasterX*x, -rasterY*y) # moving point to fill matrix
 
-                SlWindowMatrix[y+1][x+1] = val if res else None
+                vect = QgsVector(rasterX*x, -rasterY*y) # moving vector
+                
+                if (VERSION > 30400):
+                    val, res = self.DemRasterLayer.dataProvider().sample(buf_point , self.RasterChannel)
+
+                    SlWindowMatrix[y+1][x+1] = val if res else None
+                else:
+                    vect1 = QgsVector(rasterX, -rasterY) # moving vector 
+                    p1 = buf_point - vect1/2 # top left
+                    p2 = buf_point + vect1/2 # down right
+                    result = self.DemRasterLayer.dataProvider().identify(buf_point, QgsRaster.IdentifyFormat.Value , QgsRectangle(p1,p2))
+
+                    SlWindowMatrix[y+1][x+1] = result.results()[self.RasterChannel]
         
         return SlWindowMatrix
 
     def renderValuesAtPoint(self, point): # get values from DEM with given QgsPoint
         result = dict()
 
-        transformedPoint = self.transformer.transform(point)
-        val, res = self.DemRasterLayer.dataProvider().sample(transformedPoint , self.RasterChannel)
+        # transformedPoint = self.transformer.transform(point)
+        # val, res = self.DemRasterLayer.dataProvider().sample(transformedPoint , self.RasterChannel)
         
         matrix = self.getWindowMatrixAtPoint(point) # matrix with raster values
         matrix = _3x3WindowMatrix(matrix)
@@ -121,7 +155,7 @@ class CalculationData(): # DataClass for calculation params
         # rendered value and bool flag of correct result
 
         if (self.VectorFields.get('_hgt')):
-            result[self.VectorFields['_hgt']] = val if res else -999
+            result[self.VectorFields['_hgt']] = matrix.z(5) if matrix.z(5) else -999
 
         if (self.VectorFields.get('_slope')):
             fx, fy = self.GradientsFunction(matrix, self.DemRasterLayer.rasterUnitsPerPixelX())
@@ -146,12 +180,24 @@ class CalculationData(): # DataClass for calculation params
         
     def checkData(self):
         flag = True
-        if (self.LineRoadsLayer.featureCount() < 0):
-            print("* [Input Data Error]: line features count = 0")
+        self.ErrorString = ''
+
+        if (not self.LineRoadsLayer):
+            self.ErrorString += "[Input Data Error]: not set line features"
+            flag = False
+        elif (self.LineRoadsLayer.featureCount() < 0):
+            self.ErrorString += "[Input Data Error]: line features count = 0"
             flag = False
         
-        if (self.DemRasterLayer.crs().mapUnits() != Qgis.DistanceUnit.Meters):
-            print("* [Input Data Error]: Dem Raster CRS must be in meters")
+        if (not self.DemRasterLayer):
+            self.ErrorString += "[Input Data Error]: not set DEM Raster"
+            flag = False
+        elif (self.DemRasterLayer.crs().mapUnits() != Qgis.DistanceUnit.Meters):
+            self.ErrorString += "[Input Data Error]: DEM Raster CRS must be in meters"
+            flag = False
+
+        if (not self.RasterChannel):
+            self.ErrorString += "[Input Data Error]: not set channel for DEM Raster layer"
             flag = False
 
         return flag
@@ -275,10 +321,9 @@ class LineWrapper(): # wrapper for line geometry
 
 
 class VectorBuilderV1(QgsTask): # Task for building points in given layer
-    printres = pyqtSignal(str)
 
     def __init__(self, description, pointLayer, points_list, args_dict):
-        super().__init__(description, QgsTask.CanCancel)
+        super().__init__('VectorBuilderV1', QgsTask.CanCancel)
         self.pointVl = pointLayer
 
         self.pointsToAdd = points_list
@@ -307,20 +352,17 @@ class VectorBuilderV1(QgsTask): # Task for building points in given layer
         return True
     
     def finished(self, result):
-        
-        self.printres.emit('* [VectorBuilder] Task Finished with ' + str(result))
+        # self.printres.emit('* [VectorBuilderV1] Task Finished with ' + str(result))
         self.result = result
     
     def cancel(self):
-        print('* [VectorBuilder] Task cancel')
-        self.printres.emit('* [VectorBuilder] Task cancel')
+        # self.printres.emit('* [VectorBuilderV1] Task cancel')
         super().cancel()
 
 class VectorBuilderV2(QgsTask): # Task for building lines in given layer
-    printres = pyqtSignal(str)
 
     def __init__(self, description, lineLayer, lines_list, args_dict):
-        super().__init__(description, QgsTask.CanCancel)
+        super().__init__('VectorBuilderV2', QgsTask.CanCancel)
         self.lineVl = lineLayer
 
         self.linestoAdd = lines_list # list[ list[QgsPointXY,QgsPointXY,...], list[...] , ... ]
@@ -355,18 +397,18 @@ class VectorBuilderV2(QgsTask): # Task for building lines in given layer
         return True
     
     def finished(self, result):
-        self.printres.emit('* [VectorBuilderV2] Task Finished with ' + str(result))
+        # self.printres.emit('* [VectorBuilderV2] Task Finished with ' + str(result))
         self.result = result
     
     def cancel(self):
-        print('* [VectorBuilder] Task cancel')
-        self.printres.emit('* [VectorBuilder] Task cancel')
+        # print('* [VectorBuilder] Task cancel')
+        # self.printres.emit('* [VectorBuilder] Task cancel')
         super().cancel()
 
 class CalculateTask(QgsTask): # main calculation task
     initBuliderTaskV1 = pyqtSignal(list , list) # points + values
     initBuliderTaskV2 = pyqtSignal(list , list) # lines + values
-    printres = pyqtSignal(str)
+    printLog = pyqtSignal(str, str)
 
     def __init__(self, description, wrappedlines, options):
         super().__init__(description, QgsTask.CanCancel)
@@ -375,18 +417,16 @@ class CalculateTask(QgsTask): # main calculation task
 
         self.result = None
 
-    def run(self): # основная функция задачи  
-        print('** Task run')
-
+    def run(self):
         step = 100 / len(self.wrappedLinesList)
         current_progress = 0.0
 
-        for feature in self.wrappedLinesList:
+        for index, feature in enumerate(self.wrappedLinesList):
             if self.isCanceled():
                 return False
             
             if (not feature.isValid):
-                self.printres.emit("* Not valid feature")
+                self.printLog.emit('MainTask' , f'line no. {index}. Not valid feature')
                 continue
             
             point_list = []
@@ -397,31 +437,27 @@ class CalculateTask(QgsTask): # main calculation task
                 point_list.append(feature.getCurrentPoint())
                 arg_list.append(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
                 line_list.append(feature.getCurrentSegment())
-            
+            # last point on linestring
             point_list.append(feature.getCurrentPoint())
             arg_list.append(self.taskOptions.renderValuesAtPoint(feature.getCurrentPoint()))
             line_list.append(feature.getCurrentSegment())
 
-            
-            self.initBuliderTaskV1.emit(point_list, arg_list)
-            # list of separate QgsPoints with step, list of DEM values
-            self.initBuliderTaskV2.emit(line_list, arg_list)
-            # list of QgsPoints for lines, list of DEM values
 
-            # UPDATE PROGRESS
-            current_progress += step
-            self.setProgress(round(current_progress))
+            self.printLog.emit('MainTask' , f'line no. {index}. Point count: {len(point_list)}')
+            
+            self.initBuliderTaskV1.emit(point_list, arg_list) # list of separate QgsPoints with step, list of DEM values
+            self.initBuliderTaskV2.emit(line_list, arg_list) # list of QgsPoints for lines, list of DEM values
+            
+            current_progress += step 
+            self.setProgress(round(current_progress)) # UPDATE PROGRESS
 
         return True
     
     def finished(self, result):
-        print('* [CalculateTask] Task Finished with ' + str(result))
-        self.printres.emit('* [CalculateTask] Task Ended with ' + str(result))
+        self.printLog.emit('MainTask' , 'calculation finished')
         self.result = result
        
-    def cancel(self): # отмена задачи
-        print('* [CalculateTask] Task cancel')
-        self.printres.emit('* [CalculateTask] Task cancel')
+    def cancel(self): 
         super().cancel()
 
 
@@ -464,9 +500,9 @@ class DemRoadCalculator:
         self.task_manager = QgsTaskManager()  
         self.task_manager.allTasksFinished.connect(self.allTasksFinished)
         self.task_manager.progressChanged.connect(self.taskProgresChanged)
+        self.task_manager.statusChanged.connect(self.statusChanged)
 
         self.active_task = None
-        self.iterator = 0
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -482,7 +518,6 @@ class DemRoadCalculator:
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('DemRoadCalculator', message)
-
 
     def add_action(
         self,
@@ -571,7 +606,6 @@ class DemRoadCalculator:
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -579,7 +613,6 @@ class DemRoadCalculator:
                 self.tr(u'&Dem Road Calculator'),
                 action)
             self.iface.removeToolBarIcon(action)
-
 
     def run(self):
         """Run method that performs all the real work"""
@@ -591,7 +624,7 @@ class DemRoadCalculator:
             self.dlg = DemRoadCalculatorDialog()
 
             self.dlg.pushButton_start.clicked.connect(self.runTask)
-            #self.dlg.pushButton_stop.clicked.connect(self.stopTask)
+            self.dlg.pushButton_cancel.clicked.connect(self.cancelTask)
 
         # show the dialog
         self.dlg.show()
@@ -614,14 +647,22 @@ class DemRoadCalculator:
         return lines_list
 
     def runTask(self):
+        self.dlg.textEdit_log.append('---------------------------------------------------------')
+        self.printLog('init', 'preparing calculation task')
+        
         self.dlg.progressBar.setValue(0)
         self.dlg.setGUIEnabled(False)
 
-        options = self.dlg.getTaskOptions()
-        data = CalculationData(options[1],options[0],options[2],options[6],options[3],options[5],options[4])
-
+        options = self.dlg.getTaskOptionsV2()
+        # data = CalculationData(options[1],options[0],options[2],options[6],options[3],options[5],options[4])
+        data = CalculationData(options)
         if not data.checkData():
+            self.printLog('init', f'task data error\n{data.ErrorString}')
             return
+        
+        self.printLog('init', f'task data collected\n{str(data)}')
+        
+        self.TaskCount = 1 + data.LineRoadsLayer.featureCount() * 2 # count if tasks to do
 
         self.vectorLayer = QgsVectorLayer("Point", "temporary_points", "memory") # create temporary layer
         self.vectorLayer.setCrs(self.dlg.mMapLayerComboBox_lines.currentLayer().crs())
@@ -629,11 +670,12 @@ class DemRoadCalculator:
         self.linesLayer = QgsVectorLayer("LineString", "temporary_lines", "memory") # create temporary layer
         self.linesLayer.setCrs(self.dlg.mMapLayerComboBox_lines.currentLayer().crs())
 
-        for value in list(sorted(options[6].values())):
+        # for value in list(sorted(options[6].values())):
+        for value in list(sorted(options['CalcFields'].values())):
             self.vectorLayer.dataProvider().addAttributes( [QgsField(value,  QVariant.Double) ] ) # add attributes to point layer
 
-            self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_start",  QVariant.Double) ] )  # add attributes to line layer
-            self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_end",  QVariant.Double) ] )
+            self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_start",  QVariant.Double)] )  # add attributes to line layer
+            self.linesLayer.dataProvider().addAttributes( [QgsField(value + "_end",  QVariant.Double)] )
         
         self.vectorLayer.updateFields()
         self.linesLayer.updateFields()
@@ -641,56 +683,58 @@ class DemRoadCalculator:
         QgsProject.instance().addMapLayer(self.vectorLayer)
         QgsProject.instance().addMapLayer(self.linesLayer)
 
+        self.printLog('init', 'output layers created')
         
         lines_list = self.WrapLines(self.dlg.mMapLayerComboBox_lines.currentLayer()) # Wrap Line geometry
-
         
         self.active_task = CalculateTask(TASK_DESCRIPTION,lines_list,data) # start new task
         self.task_manager.addTask(self.active_task)
 
         self.active_task.initBuliderTaskV1.connect(self.runVectorEditTaskV1)
         self.active_task.initBuliderTaskV2.connect(self.runVectorEditTaskV2)
+        self.active_task.printLog.connect(self.printLog)
 
-        self.active_task.printres.connect(self.printRes)
-
-        self.printRes(" * start")
+        self.printLog('init', 'task started')
 
 
     def runVectorEditTaskV1(self, array, array_args):
         task = VectorBuilderV1(TASK_DESCRIPTION, pointLayer=self.vectorLayer,
                                 points_list=array, args_dict=array_args) 
         # pointLayer to create, point list with point coords, calculated values for points
-        task.printres.connect(self.printRes)
         self.task_manager.addTask(task)
 
     def runVectorEditTaskV2(self, array_lines, array_args):
         task = VectorBuilderV2(TASK_DESCRIPTION, lineLayer=self.linesLayer,
                                 lines_list=array_lines, args_dict=array_args) 
         # lineLayer to create, lines list with point coords, calculated values for points
-        task.printres.connect(self.printRes)
         self.task_manager.addTask(task)
 
+    def statusChanged(self, taskId, status): # task status changed
+        if (status == 3):
+            self.TaskCount -= 1
+
+        if (status == 4):
+            self.cancelTask()
+            self.iface.messageBar().pushMessage("Critical", "Error occured during calculation", level=Qgis.Critical, duration=6)
 
     def allTasksFinished(self):
-        self.printRes(" * [Task Manager]: ALL TASKS FINISED")
-        self.dlg.setGUIEnabled(True)
-        self.iface.messageBar().pushMessage("Task finished", "Output layers generated", level=Qgis.Success, duration=10)
+        if (self.TaskCount == 0):
+            # self.printRes(" * [Task Manager]: ALL TASKS FINISED")
+            self.dlg.setGUIEnabled(True)
+            self.iface.messageBar().pushMessage("Task finished", "Output layers generated", level=Qgis.Success, duration=6)
+            self.iface.mapCanvas().refresh()
+            self.printLog('TaskManager', 'All tasks finished')
         
-    
-    def taskProgresChanged(self, task_id, progress): # прогресс в задаче обновлен
-        # print(task_id, progress)
+    def taskProgresChanged(self, task_id, progress):
         self.dlg.progressBar.setValue(int(progress))
 
-    def printRes(self, string):
-        print('[',self.iterator,']' , string)
-        self.iterator += 1
+    def cancelTask(self):
+        for task in self.task_manager.activeTasks():
+            task.cancel()
+        self.iface.messageBar().pushMessage("Info", "Task cancelled", level=Qgis.Info, duration=6)
+        self.printLog('TaskManager', 'All tasks cancelled')
+    
+    def printLog(self, title, string):
+        self.dlg.textEdit_log.append(f'[{title}] : {string}')
 
-    def printDebug(self):
-        for i, task in enumerate(self.task_manager.tasks()):
-            self.printRes("Task No " + str(i) + " result is " + str(task.result))
-            self.printRes("Task No " + str(i) + "  isActive " + str(task.isActive()))
-            self.printRes("Task No " + str(i) + "  status " + str(task.status()))
-            print(task)
-            del task
-        pass
 

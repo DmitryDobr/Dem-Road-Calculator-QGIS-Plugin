@@ -48,8 +48,8 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        self.mMapLayerComboBox_lines.setFilters(QgsMapLayerProxyModel.LineLayer) # загрузка фильтра слоев в QgsMapLayerComboBox
-        self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer) # загрузка фильтра слоев в QgsMapLayerComboBox
+        self.mMapLayerComboBox_lines.setFilters(QgsMapLayerProxyModel.LineLayer)
+        self.mMapLayerComboBox_DEM.setFilters(QgsMapLayerProxyModel.RasterLayer)
 
         self.mRasterBandComboBox.setLayer(self.mMapLayerComboBox_DEM.currentLayer())
     
@@ -87,6 +87,42 @@ class DemRoadCalculatorDialog(QtWidgets.QDialog, FORM_CLASS):
         params.append(dict(sorted(vector_fields.items())))
 
         return params
+    
+    def getTaskOptionsV2(self):
+        params = dict()
+
+        params['linesLayer']    = self.mMapLayerComboBox_lines.currentLayer()
+        params['DEMLayer']      = self.mMapLayerComboBox_DEM.currentLayer()
+        params['BandNo']        = self.mRasterBandComboBox.currentBand()
+        params['SampleStep']    = self.doubleSpinBox_sample.value()
+        params['AlgorytmId']    = self.comboBox_algorytm.currentIndex()
+        params['RoundVal']      = self.spinBox_roundVal.value()
+
+        vector_fields = dict()
+        hgt_field_name = '_hgt'
+        slope_field_name = '_slope'
+        aspect_field_name = '_aspect'
+
+        # selected values to calculate
+        if (self.checkBox_val_hgt.isChecked()):
+            if (self.lineEdit_val_hgt.text()):
+                hgt_field_name = self.lineEdit_val_hgt.text()
+            vector_fields['_hgt'] = hgt_field_name
+
+        if (self.checkBox_val_slope.isChecked()):
+            if (self.lineEdit_val_slope.text()):
+                slope_field_name = self.lineEdit_val_slope.text()
+            vector_fields['_slope'] = slope_field_name
+
+        if (self.checkBox_val_aspect.isChecked()):
+            if (self.lineEdit_val_aspect.text()):
+                aspect_field_name = self.lineEdit_val_aspect.text()
+            vector_fields['_aspect'] = aspect_field_name
+
+        params['CalcFields'] = vector_fields
+
+        return params
+        
     
     def setGUIEnabled(self, flag):
         self.pushButton_start.setEnabled(flag)
