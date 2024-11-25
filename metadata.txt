@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Dem Road Analysis
+name=Dem Road Calculator
 qgisMinimumVersion=3.0
-description=Plugin for road analysis with DEM info
+description=Calculate slope and aspect road lines using DEM
 version=0.1
 author=Dmitry D.
 email=dmitrdobr@mail.ru
 
-about=Plugin for road analysis with DEM info
+about=The module is designed to calculate the average slope and exposure values for roads represented by a linear vector layer based on DEM. The tool is designed to work with roads in forestry. You should not use it on roads with engineering structures if you do not have access to high-precision terrain data
 
-tracker=http://bugs
-repository=https://github.com/DmitryDobr/testPluginQGIS
+tracker=https://github.com/DmitryDobr/Dem-Road-Calculator-QGIS-Plugin
+repository=https://github.com/DmitryDobr/Dem-Road-Calculator-QGIS-Plugin
 # End of mandatory metadata
 
 # Recommended items:
@@ -23,13 +23,13 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=analysis, dem
+tags=analysis, dem, profile, vector, line
 
-homepage=http://homepage
+homepage=https://github.com/DmitryDobr/Dem-Road-Calculator-QGIS-Plugin
 category=Plugins
 icon=icon.png
 # experimental flag
-experimental=True
+experimental=False
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
