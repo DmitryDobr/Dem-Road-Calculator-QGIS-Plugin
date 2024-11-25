@@ -342,7 +342,7 @@ class VectorBuilderV1(QgsTask): # Task for building points in given layer
 
         self.pointVl.startEditing()
         self.pointVl.dataProvider().addFeatures(pointFeatures)
-        self.pointVl.commitChanges()
+        # self.pointVl.commitChanges()
 
         self.setProgress(100)
 
@@ -385,7 +385,7 @@ class VectorBuilderV2(QgsTask): # Task for building lines in given layer
 
         self.lineVl.startEditing()
         self.lineVl.dataProvider().addFeatures(lineFeatures)
-        self.lineVl.commitChanges()
+        # self.lineVl.commitChanges()
  
         self.setProgress(100)
 
@@ -714,11 +714,13 @@ class DemRoadCalculator:
 
     def allTasksFinished(self):
         if (self.TaskCount == 0):
-            # self.printRes(" * [Task Manager]: ALL TASKS FINISED")
             self.dlg.setGUIEnabled(True)
             self.iface.messageBar().pushMessage("Task finished", "Output layers generated", level=Qgis.Success, duration=6)
             self.iface.mapCanvas().refresh()
             self.printLog('TaskManager', 'All tasks finished')
+
+            self.linesLayer.commitChanges()
+            self.vectorLayer.commitChanges()
         
     def taskProgresChanged(self, task_id, progress):
         self.dlg.progressBar.setValue(int(progress))

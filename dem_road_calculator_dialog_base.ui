@@ -6,45 +6,69 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>633</width>
-    <height>719</height>
+    <width>543</width>
+    <height>635</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dem Road Calculator</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">
-   <item row="12" column="2">
-    <widget class="QPushButton" name="pushButton_cancel">
-     <property name="text">
-      <string>Cancel</string>
+   <item row="2" column="0" colspan="3">
+    <widget class="Line" name="line_3">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
      </property>
-    </widget>
-   </item>
-   <item row="12" column="1">
-    <widget class="QPushButton" name="pushButton_start">
-     <property name="text">
-      <string>Run</string>
-     </property>
-    </widget>
-   </item>
-   <item row="12" column="0">
-    <spacer name="horizontalSpacer_4">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>40</width>
-       <height>20</height>
-      </size>
+    </widget>
+   </item>
+   <item row="6" column="0" colspan="3">
+    <widget class="Line" name="line_2">
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
      </property>
-    </spacer>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0" colspan="3">
+    <layout class="QGridLayout" name="gridLayout">
+     <item row="0" column="0">
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>1. road lines vector layer</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>2. DEM raster layer</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_DEM"/>
+     </item>
+     <item row="0" column="1">
+      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_lines"/>
+     </item>
+    </layout>
    </item>
    <item row="9" column="0" colspan="3">
     <widget class="QTextEdit" name="textEdit_log">
      <property name="readOnly">
       <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="11" column="1">
+    <widget class="QPushButton" name="pushButton_start">
+     <property name="text">
+      <string>Run</string>
      </property>
     </widget>
    </item>
@@ -200,6 +224,20 @@
      </item>
     </layout>
    </item>
+   <item row="4" column="0" colspan="3">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>Settings</string>
+     </property>
+    </widget>
+   </item>
+   <item row="11" column="2">
+    <widget class="QPushButton" name="pushButton_cancel">
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </item>
    <item row="5" column="0" colspan="3">
     <layout class="QGridLayout" name="gridLayout_2">
      <item row="3" column="2">
@@ -316,37 +354,6 @@
      </item>
     </layout>
    </item>
-   <item row="4" column="0" colspan="3">
-    <widget class="QLabel" name="label_4">
-     <property name="text">
-      <string>Settings</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0" colspan="3">
-    <layout class="QGridLayout" name="gridLayout">
-     <item row="0" column="0">
-      <widget class="QLabel" name="label">
-       <property name="text">
-        <string>1. road lines vector layer</string>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>2. DEM raster layer</string>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="1">
-      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_DEM"/>
-     </item>
-     <item row="0" column="1">
-      <widget class="QgsMapLayerComboBox" name="mMapLayerComboBox_lines"/>
-     </item>
-    </layout>
-   </item>
    <item row="0" column="0" colspan="3">
     <widget class="QLabel" name="label_3">
      <property name="text">
@@ -354,43 +361,23 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="0" colspan="3">
-    <widget class="Line" name="line_3">
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
-     </property>
+   <item row="11" column="0">
+    <spacer name="horizontalSpacer_4">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
-    </widget>
-   </item>
-   <item row="13" column="0" colspan="3">
-    <widget class="QProgressBar" name="progressBar">
-     <property name="value">
-      <number>0</number>
-     </property>
-    </widget>
-   </item>
-   <item row="10" column="0" colspan="3">
-    <spacer name="verticalSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
      <property name="sizeHint" stdset="0">
       <size>
-       <width>20</width>
-       <height>73</height>
+       <width>40</width>
+       <height>20</height>
       </size>
      </property>
     </spacer>
    </item>
-   <item row="6" column="0" colspan="3">
-    <widget class="Line" name="line_2">
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+   <item row="12" column="0" colspan="3">
+    <widget class="QProgressBar" name="progressBar">
+     <property name="value">
+      <number>0</number>
      </property>
     </widget>
    </item>
